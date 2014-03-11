@@ -21,7 +21,7 @@ library
     default-extensions: Rank2Types OverloadedStrings DeriveDataTypeable
     hs-source-dirs: src
     other-modules: Web.Postie.Connection Web.Postie.Session
-                   Web.Postie.Protocol
+                   Web.Postie.Protocol Web.Postie.Pipes
 
 executable simple
     build-depends: base -any, bytestring >=0.10.0.2, tls >=1.2.2,
