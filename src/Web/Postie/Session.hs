@@ -6,9 +6,10 @@ import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.SMTP (Event(..), Reply, reply, renderReply)
 import qualified Web.Postie.SMTP as SMTP
+import Web.Postie.Parser
+import Web.Postie.Pipes
 
-import qualified Data.ByteString as BS
-import qualified Pipes as P
+import qualified Data.ByteString.Char8 as BS
 import qualified Pipes.Parse as P
 import qualified Pipes.Attoparsec as P
 
@@ -28,7 +29,17 @@ data SessionState = SessionState {
   }
 
 smtpCommandParser :: AT.Parser BS.ByteString SMTP.Command
-smtpCommandParser = undefined
+smtpCommandParser = AT.stringCI "DATA\r\n" *> return SMTP.Data
+
+initialSessionState :: Settings -> Connection -> Application -> SessionState
+initialSessionState settings connection app = SessionState {
+    sessionApp             = app
+  , sessionSettings        = settings
+  , sessionConnection      = connection
+  , sessionConnectionInput = connectionP connection
+  , sessionTLSStatus       = SMTP.Forbidden
+  , sessionProtocolState   = SMTP.init
+  }
 
 session :: StateT SessionState IO ()
 session = do
@@ -48,27 +59,29 @@ session = do
     getCommand = do
       input            <- gets sessionConnectionInput
       (result, input') <- liftIO $ P.runStateT (P.parse smtpCommandParser) input
-      modify (\ss -> ss { sessionConnectionInput = input' })
       case result of
         Left _        -> do
           sendReply $ reply 500 "Syntax error, command unrecognized"
           getCommand
-        Right command -> return command
+        Right command -> do
+          modify (\ss -> ss { sessionConnectionInput = input' })
+          return command
 
 handleEvent :: SMTP.Event -> StateT SessionState IO ()
-handleEvent SayOK     = sendReply ok
-handleEvent StartData = do
+--handleEvent SayOK     = sendReply ok
+handleEvent _ = do
     sendReply $ reply 354 "End data with <CR><LF>.<CR><LF>"
-    mail   <- Mail <$> pure "" <*> pure [""] <*> gets sessionConnectionInput
+    input  <- gets sessionConnectionInput
+    mail   <- Mail <$> pure "" <*> pure [""] <*> chunks
     app    <- gets sessionApp
     result <- liftIO $ app mail
     case result of
       Accepted -> sendReply ok
       Rejected -> sendReply $ reply 554 "message rejected"
   where
-    
-
-
+    maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
+    sessionConnection = gets sessionConnectionInput
+    chunks            = dataChunks <$> maxDataLength <*> sessionConnection
 
 ok :: Reply
 ok = reply 250 "OK"

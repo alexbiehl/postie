@@ -5,16 +5,28 @@ module Web.Postie(
   , runSettingsSocket
   , runSettingsConnection
   , runSettingsConnectionMaker
+
+  , module Web.Postie.Types
+  , module Web.Postie.Settings
+
+  , P.Producer
+  , P.Consumer
+  , P.await
+  , P.runEffect
+  , (P.>->)
   ) where
 
 import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.Types
+import Web.Postie.Session
+import Web.Postie.Settings
 
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
 import Network.Socket (Socket, SockAddr, accept, sClose)
 
 import Control.Monad
+import Control.Monad.State (evalStateT)
 import Control.Exception as E
 import Control.Concurrent
 
@@ -71,4 +83,5 @@ runSettingsConnectionMaker settings getConnMaker app = do
     onClose = settingsOnClose settings
 
 serveConnection :: Connection -> SockAddr -> Settings -> Application -> IO ()
-serveConnection conn _ settings app = undefined
+serveConnection conn _ settings app = do
+  evalStateT session (initialSessionState settings conn app)

@@ -27,6 +27,7 @@ import Data.Default.Class
 data Settings = Settings {
     settingsPort            :: PortID -- ^ Port postie will run on.
   , settingsTimeout         :: Int    -- ^ Timeout for connections.
+  , settingsMaxDataSize     :: Int    -- ^ Maximal size of incoming mail data
   , settingsHost            :: Maybe HostName -- ^ Hostname which is shown in posties greeting.
   , settingsTLS             :: Maybe TLSSettings -- ^ TLS settings if you wish to secure connections.
   , settingsOnException     :: SomeException -> IO () -- ^ Exception handler (default is defaultExceptionHandler)
@@ -41,6 +42,7 @@ defaultSettings :: Settings
 defaultSettings = Settings {
     settingsPort             = PortNumber 3001
   , settingsTimeout         = 1800
+  , settingsMaxDataSize     = 32000
   , settingsHost            = Nothing
   , settingsTLS             = Nothing
   , settingsOnException     = defaultExceptionHandler

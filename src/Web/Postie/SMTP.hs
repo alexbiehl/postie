@@ -87,8 +87,6 @@ handleSmtpCmd st cmd tlsSt = match tlsSt st cmd
     trans (st', e) = (e, SmtpFSM (handleSmtpCmd st'))
 
 
-
-
 type StatusCode = Int
 
 data Reply = Reply StatusCode LBS.ByteString
@@ -97,6 +95,6 @@ reply :: StatusCode -> LBS.ByteString -> Reply
 reply = Reply
 
 renderReply :: Reply -> LBS.ByteString
-renderReply (Reply code body) = LBS.concat [code', " ", body]
+renderReply (Reply code body) = LBS.concat [code', " ", body, "\r\n"]
   where
     code' = LBS.pack $ show code

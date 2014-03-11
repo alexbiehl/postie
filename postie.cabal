@@ -11,7 +11,7 @@ data-dir: ""
 library
     build-depends: base >=4, network >=2.4.1.2, bytestring >=0.10.0.2,
                    tls >=1.2.2, pipes >=4.1.0, pipes-attoparsec >=0.4.0.1,
-                   pipes-parse >=3.0.1, attoparsec >=0.10.4.0, transformers >=0.3.0.0,
+                   pipes-parse >=3.0.1, pipes-bytestring, attoparsec >=0.10.4.0, transformers >=0.3.0.0,
                    mtl >=2.1.2, text >=0.11.3.1, cprng-aes >=0.5.2,
                    data-default-class >=0.0.1
     exposed-modules: Web.Postie Web.Postie.Types Web.Postie.Settings
@@ -20,5 +20,18 @@ library
     exposed: True
     buildable: True
     default-language: Haskell2010
-    default-extensions: Rank2Types OverloadedStrings
+    default-extensions: Rank2Types OverloadedStrings DeriveDataTypeable
     hs-source-dirs: src
+
+executable simple
+  Main-is: Simple.hs
+  hs-source-dirs: examples
+  build-depends:
+    base,
+    bytestring,
+    tls,
+    data-default-class,
+    pipes,
+    pipes-bytestring,
+    postie
+  default-language:    Haskell2010
