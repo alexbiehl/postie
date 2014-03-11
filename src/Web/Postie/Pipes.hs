@@ -5,6 +5,8 @@ module Web.Postie.Pipes(
   , TooMuchDataException
   ) where
 
+import Prelude hiding (lines)
+
 import Pipes
 import Pipes.Parse
 
@@ -12,6 +14,7 @@ import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as BS
 
 import Control.Monad (when, unless)
+import Control.Applicative
 import Control.Exception (throw, Exception)
 
 data UnexpectedEndOfInputException = UnexpectedEndOfInputException
@@ -24,38 +27,36 @@ instance Exception UnexpectedEndOfInputException
 instance Exception TooMuchDataException
 
 dataChunks :: Int -> Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
-dataChunks n p = chunks p >-> delimited n
+dataChunks n p = lines p >-> go n
   where
-    delimited remaining | remaining <= 0 = throw UnexpectedEndOfInputException
-    delimited remaining = do
+    go remaining | remaining <= 0 = throw UnexpectedEndOfInputException
+    go remaining = do
       bs <- await
       when (BS.length bs > remaining) $ do
         throw TooMuchDataException
-      case bs of
-        "."  -> return ()
-        _    -> yield bs >> delimited (remaining - BS.length bs)
+      unless (bs == ".") $ do
+        yield bs >> yield "\r\n" >> go (remaining - BS.length bs - 2)
 
-chunks :: Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
-chunks = go
+lines :: Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
+lines = go
   where
     go p = do
-      (bs, leftover) <- liftIO $ runStateT (drawThrow return) p
+      (line, leftover) <- liftIO $ runStateT lineParser p
+      yield line
+      go leftover
 
+lineParser :: Parser BS.ByteString IO BS.ByteString
+lineParser = go id
+  where
+    go f = do
+      bs <- maybe (throw UnexpectedEndOfInputException) (return . f) =<< draw
       case BS.elemIndex '\r' bs of
-        Nothing -> do
-          lo <- liftIO $ execStateT (drawThrow (unDraw . BS.append bs)) leftover
-          go lo
+        Nothing -> go (BS.append bs)
         Just n  -> do
-            let here = killCR $ BS.take n bs
-                rest = killCR $ BS.drop (n + 1) bs
-            lo <- case BS.null rest of
-                    True  -> return leftover
-                    False -> liftIO $ execStateT (unDraw rest) leftover
-            unless (BS.null here) $ do
-              yield here
-            yield "\r\n" >> go lo
-
-    drawThrow f = draw >>= maybe (throw UnexpectedEndOfInputException) f
+          let here = killCR $ BS.take n bs
+              rest = killCR $ BS.drop (n + 1) bs
+          unDraw rest
+          return here
 
     killCR bs
       | BS.null bs = bs
