@@ -6,8 +6,8 @@ module Web.Postie.Session(
 import Web.Postie.Types
 import Web.Postie.Settings
 import Web.Postie.Connection
-import Web.Postie.SMTP (Event(..), Reply, reply, renderReply)
-import qualified Web.Postie.SMTP as SMTP
+import Web.Postie.Protocol (Event(..), Reply, reply, renderReply)
+import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
 import qualified Data.ByteString.Char8 as BS

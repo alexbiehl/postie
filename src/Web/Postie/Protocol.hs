@@ -1,5 +1,5 @@
 
-module Web.Postie.SMTP where
+module Web.Postie.Protocol where
 
 import Data.ByteString
 import qualified Data.ByteString.Lazy.Char8 as LBS

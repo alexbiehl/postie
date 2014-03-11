@@ -9,6 +9,9 @@ module Web.Postie(
   , module Web.Postie.Types
   , module Web.Postie.Settings
 
+  , UnexpectedEndOfInputException
+  , TooMuchDataException
+
   , P.Producer
   , P.Consumer
   , P.await
@@ -21,6 +24,7 @@ import Web.Postie.Connection
 import Web.Postie.Types
 import Web.Postie.Session
 import Web.Postie.Settings
+import Web.Postie.Pipes (UnexpectedEndOfInputException, TooMuchDataException)
 
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
 import Network.Socket (Socket, SockAddr, accept, sClose)
