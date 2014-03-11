@@ -3,7 +3,6 @@ module Main where
 
 import Web.Postie
 
-import Pipes
 import Pipes.ByteString (stdout)
 
 main :: IO ()

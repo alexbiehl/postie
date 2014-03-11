@@ -25,8 +25,7 @@ import Web.Postie.Settings
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
 import Network.Socket (Socket, SockAddr, accept, sClose)
 
-import Control.Monad
-import Control.Monad.State (evalStateT)
+import Control.Monad (forever, void)
 import Control.Exception as E
 import Control.Concurrent
 
@@ -69,7 +68,7 @@ runSettingsConnectionMaker settings getConnMaker app = do
           unmask .
           handle onE .
           bracket_ onOpen onClose
-          $ serveConnection conn sockAddr settings app
+          $ serveConnection sockAddr settings conn app
       return ()
     return ()
   where
@@ -82,6 +81,5 @@ runSettingsConnectionMaker settings getConnMaker app = do
     onOpen  = settingsOnOpen settings
     onClose = settingsOnClose settings
 
-serveConnection :: Connection -> SockAddr -> Settings -> Application -> IO ()
-serveConnection conn _ settings app = do
-  evalStateT session (initialSessionState settings conn app)
+serveConnection :: SockAddr -> Settings -> Connection -> Application -> IO ()
+serveConnection _  = runSession

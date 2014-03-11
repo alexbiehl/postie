@@ -1,12 +1,13 @@
 
-module Web.Postie.Session where
+module Web.Postie.Session(
+    runSession
+  ) where
 
 import Web.Postie.Types
 import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.SMTP (Event(..), Reply, reply, renderReply)
 import qualified Web.Postie.SMTP as SMTP
-import Web.Postie.Parser
 import Web.Postie.Pipes
 
 import qualified Data.ByteString.Char8 as BS
@@ -30,6 +31,10 @@ data SessionState = SessionState {
 
 smtpCommandParser :: AT.Parser BS.ByteString SMTP.Command
 smtpCommandParser = AT.stringCI "DATA\r\n" *> return SMTP.Data
+
+runSession :: Settings -> Connection -> Application -> IO ()
+runSession settings connection app =
+  evalStateT session (initialSessionState settings connection app)
 
 initialSessionState :: Settings -> Connection -> Application -> SessionState
 initialSessionState settings connection app = SessionState {

@@ -1,5 +1,9 @@
 
-module Web.Postie.Pipes where
+module Web.Postie.Pipes(
+    dataChunks
+  , UnexpectedEndOfInputException
+  , TooMuchDataException
+  ) where
 
 import Pipes
 import Pipes.Parse
