@@ -1,7 +1,19 @@
 
-module Web.Postie.Protocol where
+module Web.Postie.Protocol(
+    TlsStatus(..)
+  , Mailbox
+  , Event(..)
+  , Command(..)
+  , SmtpFSM
+  , Reply
+  , initSmtpFSM
+  , step
+  , reply
+  , reply'
+  , renderReply
+  ) where
 
-import Data.ByteString
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 data TlsStatus = Active | Forbidden | Permitted | Required deriving (Eq)
@@ -14,12 +26,12 @@ data SessionState = Unknown
                   | HaveData
                   | HaveQuit
 
-type Mailbox = ByteString
+type Mailbox = BS.ByteString
 
-data Event =  SayHelo ByteString
-           | SayHeloAgain ByteString
-           | SayEhlo ByteString
-           | SayEhloAgain ByteString
+data Event =  SayHelo BS.ByteString
+           | SayHeloAgain BS.ByteString
+           | SayEhlo BS.ByteString
+           | SayEhloAgain BS.ByteString
            | SayOK
            | SetMailFrom Mailbox
            | AddRcptTo Mailbox
@@ -35,8 +47,8 @@ data Event =  SayHelo ByteString
            | NeedRcptToFirst
            deriving (Eq, Show)
 
-data Command = Helo ByteString
-             | Ehlo ByteString
+data Command = Helo BS.ByteString
+             | Ehlo BS.ByteString
              | MailFrom Mailbox
              | RcptTo Mailbox
              | StartTls
@@ -46,8 +58,8 @@ data Command = Helo ByteString
 
 newtype SmtpFSM = SmtpFSM { step :: Command -> TlsStatus -> (Event, SmtpFSM) }
 
-init :: SmtpFSM
-init = SmtpFSM (handleSmtpCmd Unknown)
+initSmtpFSM :: SmtpFSM
+initSmtpFSM = SmtpFSM (handleSmtpCmd Unknown)
 
 handleSmtpCmd :: SessionState -> Command -> TlsStatus -> (Event, SmtpFSM)
 handleSmtpCmd st cmd tlsSt = match tlsSt st cmd
@@ -89,12 +101,21 @@ handleSmtpCmd st cmd tlsSt = match tlsSt st cmd
 
 type StatusCode = Int
 
-data Reply = Reply StatusCode LBS.ByteString
+data Reply = Reply StatusCode [LBS.ByteString]
 
 reply :: StatusCode -> LBS.ByteString -> Reply
-reply = Reply
+reply c s = reply' c [s]
+
+reply' :: StatusCode -> [LBS.ByteString] -> Reply
+reply' = Reply
 
 renderReply :: Reply -> LBS.ByteString
-renderReply (Reply code body) = LBS.concat [code', " ", body, "\r\n"]
+renderReply (Reply code msgs) = LBS.concat msg'
   where
-    code' = LBS.pack $ show code
+    prefixCon = LBS.pack (show code ++ "-")
+    prefixEnd = LBS.pack (show code ++ " ")
+    fmt p l = LBS.concat [p, l, "\r\n"]
+    (x:xs) = reverse msgs
+    msgCon = map (fmt prefixCon) xs
+    msgEnd = fmt prefixEnd x
+    msg' = reverse (msgEnd:msgCon)

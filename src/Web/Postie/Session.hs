@@ -43,7 +43,7 @@ initialSessionState settings connection app = SessionState {
   , sessionConnection      = connection
   , sessionConnectionInput = connectionP connection
   , sessionTLSStatus       = SMTP.Forbidden
-  , sessionProtocolState   = SMTP.init
+  , sessionProtocolState   = SMTP.initSmtpFSM
   }
 
 session :: StateT SessionState IO ()
