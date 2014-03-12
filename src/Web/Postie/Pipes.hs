@@ -32,10 +32,14 @@ dataChunks n p = lines p >-> go n
     go remaining | remaining <= 0 = throw UnexpectedEndOfInputException
     go remaining = do
       bs <- await
-      when (BS.length bs > remaining) $ do
-        throw TooMuchDataException
       unless (bs == ".") $ do
-        yield bs >> yield "\r\n" >> go (remaining - BS.length bs - 2)
+        yield (unescape bs)
+        yield "\r\n"
+        go (remaining - BS.length bs - 2)
+
+    unescape bs | BS.null bs                            = bs
+                | BS.head bs == '.' && BS.length bs > 1 = BS.tail bs
+                | otherwise                             = bs
 
 lines :: Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
 lines = go
