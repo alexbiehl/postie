@@ -9,14 +9,14 @@ module Web.Postie.Settings(
   ) where
 
 import Web.Postie.Types
+import Web.Postie.Address
 
 import Network (HostName, PortID(..), Socket)
 import Control.Exception
 import GHC.IO.Exception (IOErrorType(..))
 import System.IO (hPrint, stderr)
 import System.IO.Error (ioeGetErrorType)
-
-import qualified Data.Text as T
+import Data.ByteString (ByteString)
 
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
@@ -34,8 +34,10 @@ data Settings = Settings {
   , settingsOnOpen          :: IO () -- ^ Action will be performed when connection has been opened.
   , settingsOnClose         :: IO () -- ^ Action will be performed when connection has been closed.
   , settingsBeforeMainLoop  :: IO () -- ^ Action will be performed before main processing begins.
-  , settingsOnMailFrom      :: T.Text -> IO HandlerResponse
-  , settingsOnRecipient     :: T.Text -> IO HandlerResponse
+  , settingsOnStartTLS      :: IO ()
+  , settingsOnHello         :: ByteString -> IO HandlerResponse
+  , settingsOnMailFrom      :: Address -> IO HandlerResponse
+  , settingsOnRecipient     :: Address -> IO HandlerResponse
   }
 
 defaultSettings :: Settings
@@ -49,6 +51,8 @@ defaultSettings = Settings {
   , settingsOnOpen          = return ()
   , settingsOnClose         = return ()
   , settingsBeforeMainLoop  = return ()
+  , settingsOnStartTLS      = return ()
+  , settingsOnHello         = const $ return Accepted
   , settingsOnMailFrom      = const $ return Accepted
   , settingsOnRecipient     = const $ return Accepted
   }

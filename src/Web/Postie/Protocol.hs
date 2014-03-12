@@ -13,8 +13,15 @@ module Web.Postie.Protocol(
   , renderReply
   ) where
 
+import Prelude hiding (takeWhile)
+
+import Web.Postie.Address
+
+import Data.Attoparsec.Char8
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+
+import Control.Applicative
 
 data TlsStatus = Active | Forbidden | Permitted | Required deriving (Eq)
 
@@ -26,7 +33,7 @@ data SessionState = Unknown
                   | HaveData
                   | HaveQuit
 
-type Mailbox = BS.ByteString
+type Mailbox = Address
 
 data Event =  SayHelo BS.ByteString
            | SayHeloAgain BS.ByteString
@@ -119,3 +126,58 @@ renderReply (Reply code msgs) = LBS.concat msg'
     msgCon = map (fmt prefixCon) xs
     msgEnd = fmt prefixEnd x
     msg' = reverse (msgEnd:msgCon)
+
+parseCommand :: Parser Command
+parseCommand = choice $ map try [
+                                parseHelo,
+                                parseEhlo,
+                                parseMailFrom,
+                                parseRcptTo,
+                                parseStartTls,
+                                parseData,
+                                parseRset,
+                                parseQuit]
+
+crlf = char '\r' >> char '\r' >> return ()
+
+parseHelo :: Parser Command
+parseHelo = do
+  stringCI "helo "
+  greeting <- takeWhile (notInClass "\t\r\n ")
+  crlf
+  return $ Helo greeting
+
+parseEhlo :: Parser Command
+parseEhlo = do
+  stringCI "ehlo "
+  greeting <- takeWhile (notInClass "\t\r\n ")
+  crlf
+  return $ Ehlo greeting
+
+parseMailFrom :: Parser Command
+parseMailFrom = do
+  stringCI "mail from:<"
+  address <- addrSpec
+  char '>'
+  crlf
+  return $ MailFrom address
+
+parseRcptTo :: Parser Command
+parseRcptTo = do
+  stringCI "rcpt to:<"
+  address <- addrSpec
+  char '>'
+  crlf
+  return $ RcptTo address
+
+parseStartTls :: Parser Command
+parseStartTls = stringCI "starttls" >> crlf >> pure StartTls
+
+parseRset :: Parser Command
+parseRset = stringCI "rset" >> crlf >> pure Rset
+
+parseData :: Parser Command
+parseData = stringCI "data" >> crlf >> pure Data
+
+parseQuit :: Parser Command
+parseQuit = stringCI "quit" >> crlf >> pure Quit

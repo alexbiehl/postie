@@ -3,6 +3,9 @@ module Web.Postie.Session(
     runSession
   ) where
 
+import Prelude hiding (lines)
+
+import Web.Postie.Address
 import Web.Postie.Types
 import Web.Postie.Settings
 import Web.Postie.Connection
@@ -11,6 +14,8 @@ import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
 import qualified Data.ByteString.Char8 as BS
+
+import Pipes ((>->))
 import qualified Pipes.Parse as P
 import qualified Pipes.Attoparsec as P
 
@@ -27,7 +32,12 @@ data SessionState = SessionState {
   , sessionConnectionInput  :: P.Producer BS.ByteString IO ()
   , sessionTLSStatus        :: SMTP.TlsStatus
   , sessionProtocolState    :: SMTP.SmtpFSM
+  , sessionTransaction      :: Transaction
   }
+
+data Transaction = TxnInitial
+                 | TxnHaveMailFrom Address
+                 | TxnHaveRecipient Address [Address]
 
 smtpCommandParser :: AT.Parser BS.ByteString SMTP.Command
 smtpCommandParser = AT.stringCI "DATA\r\n" *> return SMTP.Data
@@ -44,6 +54,7 @@ initialSessionState settings connection app = SessionState {
   , sessionConnectionInput = connectionP connection
   , sessionTLSStatus       = SMTP.Forbidden
   , sessionProtocolState   = SMTP.initSmtpFSM
+  , sessionTransaction     = TxnInitial
   }
 
 session :: StateT SessionState IO ()
@@ -55,8 +66,7 @@ session = do
         return ()
       _        -> do
         modify (\ss -> ss { sessionProtocolState = fsm' })
-        handleEvent event
-        session
+        handleEvent event >> session
   where
     getSmtpFsm   = gets sessionProtocolState
     getTlsStatus = gets sessionTLSStatus
@@ -73,11 +83,51 @@ session = do
           return command
 
 handleEvent :: SMTP.Event -> StateT SessionState IO ()
---handleEvent SayOK     = sendReply ok
-handleEvent _ = do
+handleEvent (SayHelo x)      = do
+  handler <- settingsOnHello <$> gets sessionSettings
+  result  <- liftIO $ handler x
+  case result of
+    Accepted -> sendReply ok
+    _        -> sendReply undefined
+
+handleEvent (SayEhlo x)      = do
+  handler <- settingsOnHello <$> gets sessionSettings
+  result  <- liftIO $ handler x
+  case result of
+    Accepted -> sendReply undefined
+    _        -> sendReply undefined
+
+handleEvent (SayEhloAgain _) = sendReply ok
+handleEvent (SayHeloAgain _) = sendReply ok
+handleEvent SayOK            = sendReply ok
+
+handleEvent (SetMailFrom x)  = do
+  handler <- settingsOnMailFrom <$> gets sessionSettings
+  result  <- liftIO $ handler x
+  case result of
+    Accepted -> do
+      modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
+      sendReply ok
+    _        -> sendReply undefined
+
+handleEvent (AddRcptTo x)   = do
+  handler <- settingsOnRecipient <$> gets sessionSettings
+  result  <- liftIO $ handler x
+  case result of
+    Accepted -> do
+      txn <- gets sessionTransaction
+      let txn' = case txn of
+                  (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
+                  (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
+      modify (\ss -> ss {sessionTransaction = txn' })
+      sendReply ok
+    _        -> sendReply undefined
+
+handleEvent StartData       = do
     sendReply $ reply 354 "End data with <CR><LF>.<CR><LF>"
-    input  <- gets sessionConnectionInput
-    mail   <- Mail <$> pure "" <*> pure [""] <*> chunks
+    input <- gets sessionConnectionInput
+    (TxnHaveRecipient sender recipients) <- gets sessionTransaction
+    mail   <- Mail sender recipients <$> chunks
     app    <- gets sessionApp
     result <- liftIO $ app mail
     case result of
@@ -87,6 +137,30 @@ handleEvent _ = do
     maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
     sessionConnection = gets sessionConnectionInput
     chunks            = dataChunks <$> maxDataLength <*> sessionConnection
+
+handleEvent WantTls        = do
+  undefined
+
+handleEvent WantReset      = do
+  undefined
+
+handleEvent TlsAlreadyActive = do
+  undefined
+
+handleEvent TlsNotSupported = do
+  undefined
+
+handleEvent NeedStartTlsFirst = do
+  undefined
+
+handleEvent NeedHeloFirst = do
+  undefined
+
+handleEvent NeedMailFromFirst = do
+  undefined
+
+handleEvent NeedRcptToFirst = do
+  undefined
 
 ok :: Reply
 ok = reply 250 "OK"
