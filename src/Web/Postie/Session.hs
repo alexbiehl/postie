@@ -18,7 +18,6 @@ import qualified Data.ByteString.Char8 as BS
 
 import Pipes (await, yield, lift, (>->))
 import qualified Pipes.Parse as P
-import qualified Pipes.Attoparsec as P
 
 import Control.Applicative
 import Control.Monad.State
