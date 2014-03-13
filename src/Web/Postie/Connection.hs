@@ -1,14 +1,17 @@
 module Web.Postie.Connection(
     Connection,
+    StartTLSPolicy(..),
 
     connRecv,
     connSend,
     connClose,
     connIsSecure,
+
     connStartTls,
+    connAllowStartTLS,
+    connDemandStartTLS,
 
     socketConnection,
-    secureSocketConnection,
 
     connectionP
   ) where
@@ -31,37 +34,63 @@ import qualified Pipes as P
 
 -- |Low-level connection abstraction
 data Connection = Connection {
-    connRecv      :: IO BS.ByteString -- ^ Reads data from connection. Returns empty bytestring if eof is reached.
-  , connSend      :: LBS.ByteString -> IO () -- ^ Sends data over the connection.
-  , connClose     :: IO ()    -- ^Closes the connection.
-  , connIsSecure  :: Bool     -- ^Returns true if this is a TLS-secured connection.
-  , connStartTls  :: ServerParams -> IO Connection -- ^Creates new connection which is secured by TLS.
+    connRecv           :: IO BS.ByteString -- ^ Reads data from connection. Returns empty bytestring if eof is reached.
+  , connSend           :: LBS.ByteString -> IO () -- ^ Sends data over the connection.
+  , connClose          :: IO ()    -- ^Closes the connection.
+  , connIsSecure       :: Bool     -- ^Returns true if this is a TLS-secured connection.
+  , connStartTlsPolicy :: StartTLSPolicy
+  , connStartTls       :: IO Connection -- ^Creates new connection which is secured by TLS.
   }
 
--- | Insecure connection from socket.
-socketConnection :: Socket -> IO Connection
-socketConnection socket = return connection
+data StartTLSPolicy = Allow ServerParams | Demand ServerParams | NotAvailable
+
+-- | Upgradeable connection from Socket
+socketConnection :: Socket -> StartTLSPolicy -> IO Connection
+socketConnection socket policy = return connection
   where
     connection = Connection {
       connRecv     = recv socket defaultChunkSize
     , connSend     = sendAll socket
     , connClose    = sClose socket
     , connIsSecure = False
-    , connStartTls = secureSocketConnection socket
+    , connStartTlsPolicy = policy
+    , connStartTls = secureConnection
     }
 
--- | Creates a secured connection from a socket and given Serverparams
-secureSocketConnection :: Socket -> ServerParams -> IO Connection
-secureSocketConnection socket params = do
-  context <- contextNew socket params =<< makeSystem
-  handshake context
-  return Connection {
-    connRecv     = recvData context
-  , connSend     = sendData context
-  , connClose    = bye context `finally` contextClose context
-  , connIsSecure = True
-  , connStartTls = error "already on secure connection"
-  }
+    secureConnection = do
+      context <- contextNew socket params =<< makeSystem
+      handshake context
+
+      return Connection {
+          connRecv     = recvData context
+        , connSend     = sendData context
+        , connClose    = bye context `finally` contextClose context
+        , connIsSecure = True
+        , connStartTlsPolicy = policy
+        , connStartTls = error "already on secure connection"
+      }
+
+    params = case policy of
+      (Allow p)  -> p
+      (Demand p) -> p
+      _          -> error "no upgrade allowed"
+
+connAllowStartTLS :: Connection -> Bool
+connAllowStartTLS conn | connIsSecure conn = False
+                       | allowedByPolicy (connStartTlsPolicy conn) = True
+                       | otherwise         = False
+  where
+    allowedByPolicy (Allow _)   = True
+    allowedByPolicy (Demand _)  = True
+    allowedByPolicy _           = False
+
+connDemandStartTLS :: Connection -> Bool
+connDemandStartTLS conn | connIsSecure conn = False
+                        | demandByPolicy (connStartTlsPolicy conn) = True
+                        | otherwise         = False
+  where
+    demandByPolicy (Demand _) = True
+    demandByPolicy _          = False
 
 connectionP :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()
 connectionP conn = go

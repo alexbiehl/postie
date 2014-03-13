@@ -46,11 +46,20 @@ runSettings settings app = withSocketsDo $
     port = settingsPort settings
 
 runSettingsSocket :: Settings -> Socket -> Application -> IO ()
-runSettingsSocket settings socket = runSettingsConnection settings getConn
+runSettingsSocket settings socket app = do
+    policy <- startTlsPolicy
+    runSettingsConnection settings (getConn policy) app
   where
-    getConn = do
+    startTlsPolicy = do
+      tlsServerParams <- settingsServerParams settings
+      return $ case tlsServerParams of
+        (Just params) | settingsDemandSecure settings -> Demand params
+                      | settingsAllowSecure settings  -> Allow params
+        _                                             -> NotAvailable
+
+    getConn policy = do
       (s, sa) <- accept socket
-      conn <- socketConnection s
+      conn <- socketConnection s policy
       return (conn, sa)
 
 runSettingsConnection :: Settings -> IO (Connection, SockAddr) -> Application -> IO ()

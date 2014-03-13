@@ -6,6 +6,9 @@ module Web.Postie.Settings(
   , tlsSettings
   , defaultTLSSettings
   , defaultExceptionHandler
+  , settingsServerParams
+  , settingsAllowSecure
+  , settingsDemandSecure
   ) where
 
 import Web.Postie.Types
@@ -22,6 +25,8 @@ import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
 import Data.Default.Class
+
+import Control.Applicative ((<$>))
 
 -- | Settings to configure posties behaviour.
 data Settings = Settings {
@@ -68,6 +73,7 @@ data TLSSettings = TLSSettings {
 
 data ConnectionSecurity = AllowSecure
                         | DemandSecure
+                        deriving (Eq, Show)
 
 defaultTLSSettings :: TLSSettings
 defaultTLSSettings = TLSSettings {
@@ -84,6 +90,36 @@ tlsSettings cert key = defaultTLSSettings {
     certFile = cert
   , keyFile  = key
   }
+
+settingsAllowSecure :: Settings -> Bool
+settingsAllowSecure settings =
+  maybe False (== AllowSecure) $ settingsTLS settings >>= return . security
+
+settingsDemandSecure :: Settings -> Bool
+settingsDemandSecure settings =
+  maybe False (== DemandSecure) $ settingsTLS settings >>= return . security
+
+settingsServerParams :: Settings -> IO (Maybe TLS.ServerParams)
+settingsServerParams settings = do
+    case settingsTLS settings of
+      Just ts   -> do
+                     params <- mkServerParams ts
+                     return $ Just params
+      _         -> return Nothing
+  where
+    mkServerParams tls = do
+      credential <- either (throw . TLS.Error_Certificate) id <$>
+        TLS.credentialLoadX509 (certFile tls) (keyFile tls)
+
+      return def {
+        TLS.serverShared = def {
+          TLS.sharedCredentials = TLS.Credentials [credential]
+        },
+        TLS.serverSupported = def {
+          TLS.supportedCiphers  = (tlsCiphers tls)
+        , TLS.supportedVersions = (tlsAllowedVersions tls)
+        }
+      }
 
 defaultExceptionHandler :: SomeException -> IO ()
 defaultExceptionHandler e = throwIO e `catches` handlers

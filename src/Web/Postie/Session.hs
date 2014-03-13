@@ -13,6 +13,8 @@ import Web.Postie.Protocol (Event(..), Reply, reply, reply', renderReply)
 import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
+import Network.TLS as TLS
+
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as BS
 
@@ -27,7 +29,6 @@ data SessionState = SessionState {
   , sessionSettings         :: Settings
   , sessionConnection       :: Connection
   , sessionConnectionInput  :: P.Producer BS.ByteString IO ()
-  , sessionTLSStatus        :: SMTP.TlsStatus
   , sessionProtocolState    :: SMTP.SmtpFSM
   , sessionTransaction      :: Transaction
   }
@@ -42,14 +43,13 @@ runSession settings connection app =
 
 initialSessionState :: Settings -> Connection -> Application -> SessionState
 initialSessionState settings connection app = SessionState {
-    sessionApp             = app
-  , sessionSettings        = settings
-  , sessionConnection      = connection
-  , sessionConnectionInput = connectionP connection
-  , sessionTLSStatus       = SMTP.Forbidden
-  , sessionProtocolState   = SMTP.initSmtpFSM
-  , sessionTransaction     = TxnInitial
-  }
+      sessionApp             = app
+    , sessionSettings        = settings
+    , sessionConnection      = connection
+    , sessionConnectionInput = connectionP connection
+    , sessionProtocolState   = SMTP.initSmtpFSM
+    , sessionTransaction     = TxnInitial
+    }
 
 session :: StateT SessionState IO ()
 session = do
@@ -63,7 +63,14 @@ session = do
         handleEvent event >> session
   where
     getSmtpFsm   = gets sessionProtocolState
-    getTlsStatus = gets sessionTLSStatus
+    getTlsStatus = do
+      conn <- gets sessionConnection
+
+      return $ case conn of
+        _ | connIsSecure conn       -> SMTP.Active
+          | connDemandStartTLS conn -> SMTP.Required
+          | connAllowStartTLS  conn -> SMTP.Permitted
+          | otherwise               -> SMTP.Forbidden
 
 handleEvent :: SMTP.Event -> StateT SessionState IO ()
 handleEvent (SayHelo x)      = do
@@ -123,7 +130,16 @@ handleEvent StartData       = do
 handleEvent WantTls = do
   handler <- settingsOnStartTLS <$> gets sessionSettings
   liftIO $ handler
-  sendReply reject
+
+  sendReply ok
+
+  conn    <- gets sessionConnection
+  conn'   <- liftIO $ connStartTls conn
+
+  modify (\ss -> ss {
+    sessionConnection      = conn'
+  , sessionConnectionInput = connectionP conn'
+  })
 
 handleEvent WantReset = do
   sendReply ok
