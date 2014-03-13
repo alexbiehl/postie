@@ -1,6 +1,7 @@
 
 module Web.Postie.Pipes(
     dataChunks
+  , attoParser
   , UnexpectedEndOfInputException
   , TooMuchDataException
   ) where
@@ -10,8 +11,10 @@ import Prelude hiding (lines)
 import Pipes
 import Pipes.Parse
 
+import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Attoparsec as AT
 
 import Control.Monad (when, unless)
 import Control.Applicative
@@ -25,6 +28,17 @@ data TooMuchDataException = TooMuchDataException
 
 instance Exception UnexpectedEndOfInputException
 instance Exception TooMuchDataException
+
+attoParser :: AT.Parser r -> Parser BS.ByteString IO (Maybe r)
+attoParser p = do
+    result <- AT.parseWith draw' p ""
+    case result of
+      AT.Done t r -> do
+                      unless (BS.null t) (unDraw t)
+                      return (Just r)
+      _           -> return Nothing
+  where
+    draw' = fromMaybe "" <$> draw
 
 dataChunks :: Int -> Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
 dataChunks n p = lines p >-> go n
@@ -45,7 +59,7 @@ lines :: Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
 lines = go
   where
     go p = do
-      (line, leftover) <- liftIO $ runStateT lineParser p
+      (line, leftover) <- lift $ runStateT lineParser p
       yield line
       go leftover
 

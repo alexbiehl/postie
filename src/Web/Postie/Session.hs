@@ -9,18 +9,16 @@ import Web.Postie.Address
 import Web.Postie.Types
 import Web.Postie.Settings
 import Web.Postie.Connection
-import Web.Postie.Protocol (Event(..), Reply, reply, renderReply)
+import Web.Postie.Protocol (Event(..), Reply, reply, reply', renderReply)
 import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as BS
 
-import Pipes ((>->))
+import Pipes (await, yield, lift, (>->))
 import qualified Pipes.Parse as P
 import qualified Pipes.Attoparsec as P
-
-import qualified Data.Attoparsec.Char8 as AT hiding (Parser)
-import qualified Data.Attoparsec.Types as AT
 
 import Control.Applicative
 import Control.Monad.State
@@ -38,9 +36,6 @@ data SessionState = SessionState {
 data Transaction = TxnInitial
                  | TxnHaveMailFrom Address
                  | TxnHaveRecipient Address [Address]
-
-smtpCommandParser :: AT.Parser BS.ByteString SMTP.Command
-smtpCommandParser = AT.stringCI "DATA\r\n" *> return SMTP.Data
 
 runSession :: Settings -> Connection -> Application -> IO ()
 runSession settings connection app =
@@ -71,31 +66,20 @@ session = do
     getSmtpFsm   = gets sessionProtocolState
     getTlsStatus = gets sessionTLSStatus
 
-    getCommand = do
-      input            <- gets sessionConnectionInput
-      (result, input') <- liftIO $ P.runStateT (P.parse smtpCommandParser) input
-      case result of
-        Left _        -> do
-          sendReply $ reply 500 "Syntax error, command unrecognized"
-          getCommand
-        Right command -> do
-          modify (\ss -> ss { sessionConnectionInput = input' })
-          return command
-
 handleEvent :: SMTP.Event -> StateT SessionState IO ()
 handleEvent (SayHelo x)      = do
   handler <- settingsOnHello <$> gets sessionSettings
   result  <- liftIO $ handler x
   case result of
     Accepted -> sendReply ok
-    _        -> sendReply undefined
+    _        -> sendReply reject
 
 handleEvent (SayEhlo x)      = do
   handler <- settingsOnHello <$> gets sessionSettings
   result  <- liftIO $ handler x
   case result of
-    Accepted -> sendReply undefined
-    _        -> sendReply undefined
+    Accepted -> sendReply =<< ehloAdvertisement
+    _        -> sendReply reject
 
 handleEvent (SayEhloAgain _) = sendReply ok
 handleEvent (SayHeloAgain _) = sendReply ok
@@ -108,62 +92,83 @@ handleEvent (SetMailFrom x)  = do
     Accepted -> do
       modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
       sendReply ok
-    _        -> sendReply undefined
+    _        -> sendReply reject
 
 handleEvent (AddRcptTo x)   = do
   handler <- settingsOnRecipient <$> gets sessionSettings
   result  <- liftIO $ handler x
   case result of
     Accepted -> do
-      txn <- gets sessionTransaction
-      let txn' = case txn of
-                  (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
-                  (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
-      modify (\ss -> ss {sessionTransaction = txn' })
-      sendReply ok
-    _        -> sendReply undefined
+                txn <- gets sessionTransaction
+                let txn' = case txn of
+                          (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
+                          (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
+                modify (\ss -> ss {sessionTransaction = txn' })
+                sendReply ok
+    _        -> sendReply reject
 
 handleEvent StartData       = do
     sendReply $ reply 354 "End data with <CR><LF>.<CR><LF>"
-    input <- gets sessionConnectionInput
     (TxnHaveRecipient sender recipients) <- gets sessionTransaction
     mail   <- Mail sender recipients <$> chunks
     app    <- gets sessionApp
     result <- liftIO $ app mail
     case result of
       Accepted -> sendReply ok
-      Rejected -> sendReply $ reply 554 "message rejected"
+      Rejected -> sendReply reject
   where
     maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
     sessionConnection = gets sessionConnectionInput
     chunks            = dataChunks <$> maxDataLength <*> sessionConnection
 
-handleEvent WantTls        = do
-  undefined
+handleEvent WantTls = do
+  handler <- settingsOnStartTLS <$> gets sessionSettings
+  liftIO $ handler
+  sendReply reject
 
-handleEvent WantReset      = do
-  undefined
+handleEvent WantReset = do
+  sendReply ok
+  modify (\ss -> ss { sessionTransaction = TxnInitial })
 
 handleEvent TlsAlreadyActive = do
-  undefined
+  sendReply $ reply 454 "STARTTLS not support (already active)"
 
 handleEvent TlsNotSupported = do
-  undefined
+  sendReply $ reply 454 "STARTTLS not supported"
 
 handleEvent NeedStartTlsFirst = do
-  undefined
+  sendReply $ reply 530 "Issue STARTTLS first"
 
 handleEvent NeedHeloFirst = do
-  undefined
+  sendReply $ reply 503 "Need EHLO first"
 
 handleEvent NeedMailFromFirst = do
-  undefined
+  sendReply $ reply 503 "Need MAIL FROM first"
 
 handleEvent NeedRcptToFirst = do
-  undefined
+  sendReply $ reply 503 "Need RCPT TO first"
+
+getCommand :: StateT SessionState IO SMTP.Command
+getCommand = do
+  input   <- gets sessionConnectionInput
+  result  <- liftIO $ P.evalStateT (attoParser SMTP.parseCommand) input
+  case result of
+    Nothing       -> do
+      sendReply $ reply 500 "Syntax error, command unrecognized"
+      getCommand
+    Just command  -> do
+      return command
+
+ehloAdvertisement :: StateT SessionState IO Reply
+ehloAdvertisement = do
+  let extensions = ["8BITMIME"]
+  return $ reply' 250 (extensions ++ ["OK"])
 
 ok :: Reply
 ok = reply 250 "OK"
+
+reject :: Reply
+reject = reply 554 "Transaction failed"
 
 sendReply :: Reply -> StateT SessionState IO ()
 sendReply reply = do

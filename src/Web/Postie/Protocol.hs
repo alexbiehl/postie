@@ -11,6 +11,10 @@ module Web.Postie.Protocol(
   , reply
   , reply'
   , renderReply
+
+  , parseCommand
+  , parseHelo
+  , parseMailFrom
   ) where
 
 import Prelude hiding (takeWhile)
@@ -18,6 +22,7 @@ import Prelude hiding (takeWhile)
 import Web.Postie.Address
 
 import Data.Attoparsec.Char8
+import Data.Attoparsec.Combinator
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
@@ -62,6 +67,7 @@ data Command = Helo BS.ByteString
              | Data
              | Rset
              | Quit
+             deriving (Eq, Show)
 
 newtype SmtpFSM = SmtpFSM { step :: Command -> TlsStatus -> (Event, SmtpFSM) }
 
@@ -128,56 +134,47 @@ renderReply (Reply code msgs) = LBS.concat msg'
     msg' = reverse (msgEnd:msgCon)
 
 parseCommand :: Parser Command
-parseCommand = choice $ map try [
-                                parseHelo,
-                                parseEhlo,
-                                parseMailFrom,
-                                parseRcptTo,
-                                parseStartTls,
-                                parseData,
-                                parseRset,
-                                parseQuit]
+parseCommand = commands <* crlf
+  where
+    commands = choice [
+                        parseQuit
+                      , parseData
+                      , parseRset
+                      , parseHelo
+                      , parseEhlo
+                      , parseStartTls
+                      , parseMailFrom
+                      , parseRcptTo
+                      ]
 
-crlf = char '\r' >> char '\r' >> return ()
+crlf :: Parser ()
+crlf = char '\r' >> char '\n' >> return ()
+
+parseHello :: (BS.ByteString -> Command) -> BS.ByteString -> Parser Command
+parseHello f s = f `fmap` parser
+  where
+    parser = stringCI s *> char ' ' *> takeWhile (notInClass "\r ")
 
 parseHelo :: Parser Command
-parseHelo = do
-  stringCI "helo "
-  greeting <- takeWhile (notInClass "\t\r\n ")
-  crlf
-  return $ Helo greeting
+parseHelo = parseHello Helo "HELO"
 
 parseEhlo :: Parser Command
-parseEhlo = do
-  stringCI "ehlo "
-  greeting <- takeWhile (notInClass "\t\r\n ")
-  crlf
-  return $ Ehlo greeting
+parseEhlo = parseHello Ehlo "EHLO"
 
 parseMailFrom :: Parser Command
-parseMailFrom = do
-  stringCI "mail from:<"
-  address <- addrSpec
-  char '>'
-  crlf
-  return $ MailFrom address
+parseMailFrom = stringCI "mail from:<" *> (MailFrom `fmap` addrSpec) <* char '>'
 
 parseRcptTo :: Parser Command
-parseRcptTo = do
-  stringCI "rcpt to:<"
-  address <- addrSpec
-  char '>'
-  crlf
-  return $ RcptTo address
+parseRcptTo = stringCI "rcpt to:<" *> (RcptTo `fmap` addrSpec) <* char '>'
 
 parseStartTls :: Parser Command
-parseStartTls = stringCI "starttls" >> crlf >> pure StartTls
+parseStartTls = stringCI "starttls" *> pure StartTls
 
 parseRset :: Parser Command
-parseRset = stringCI "rset" >> crlf >> pure Rset
+parseRset = stringCI "rset" *> pure Rset
 
 parseData :: Parser Command
-parseData = stringCI "data" >> crlf >> pure Data
+parseData = stringCI "data" *> pure Data
 
 parseQuit :: Parser Command
-parseQuit = stringCI "quit" >> crlf >> pure Quit
+parseQuit = stringCI "quit" *> pure Quit

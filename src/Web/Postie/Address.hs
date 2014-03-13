@@ -17,7 +17,7 @@ import qualified Data.ByteString.Char8 as BS
 import Control.Applicative
 
 data Address = Address {
-    addressLocalPart :: BS.ByteString
+    addressLocalPart :: !BS.ByteString
   , addressDomain    :: BS.ByteString
   }
   deriving (Eq, Ord, Typeable)
