@@ -16,7 +16,7 @@ import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Attoparsec as AT
 
-import Control.Monad (when, unless)
+import Control.Monad (unless)
 import Control.Applicative
 import Control.Exception (throw, Exception)
 

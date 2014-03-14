@@ -13,12 +13,8 @@ import Web.Postie.Protocol (Event(..), Reply, reply, reply', renderReply)
 import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
-import Network.TLS as TLS
-
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as BS
 
-import Pipes (await, yield, lift, (>->))
 import qualified Pipes.Parse as P
 
 import Control.Applicative
@@ -132,8 +128,7 @@ handleEvent StartData       = do
       Rejected -> sendReply reject
   where
     maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
-    sessionConnection = gets sessionConnectionInput
-    chunks            = dataChunks <$> maxDataLength <*> sessionConnection
+    chunks            = dataChunks <$> maxDataLength <*> gets sessionConnectionInput
 
 handleEvent WantTls = do
   handler <- settingsOnStartTLS <$> gets sessionSettings
@@ -201,6 +196,6 @@ reject :: Reply
 reject = reply 554 "Transaction failed"
 
 sendReply :: Reply -> StateT SessionState IO ()
-sendReply reply = do
+sendReply r = do
   conn <- gets sessionConnection
-  liftIO $ connSend conn (renderReply reply)
+  liftIO $ connSend conn (renderReply r)

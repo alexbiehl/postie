@@ -14,14 +14,12 @@ module Web.Postie.Settings(
 import Web.Postie.Types
 import Web.Postie.Address
 
-import Network (HostName, PortID(..), Socket)
+import Network (HostName, PortID(..))
 import Control.Exception
 import GHC.IO.Exception (IOErrorType(..))
 import System.IO (hPrint, stderr)
 import System.IO.Error (ioeGetErrorType)
 import Data.ByteString (ByteString)
-
-import System.Timeout
 
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS

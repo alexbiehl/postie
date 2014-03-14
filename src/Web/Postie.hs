@@ -25,7 +25,6 @@ import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.Types
 import Web.Postie.Session
-import Web.Postie.Settings
 import Web.Postie.Pipes (UnexpectedEndOfInputException, TooMuchDataException)
 
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
@@ -78,7 +77,7 @@ runSettingsConnection settings getConn = runSettingsConnectionMaker settings get
 runSettingsConnectionMaker :: Settings -> IO (IO Connection, SockAddr) -> Application -> IO ()
 runSettingsConnectionMaker settings getConnMaker app = do
     settingsBeforeMainLoop settings
-    forever $ do
+    void $ forever $ do
       (mkConn, sockAddr) <- getConnLoop
       void $ forkIOWithUnmask $ \unmask -> do
           bracket mkConn connClose $ \conn ->

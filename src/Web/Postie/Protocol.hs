@@ -22,7 +22,6 @@ import Prelude hiding (takeWhile)
 import Web.Postie.Address
 
 import Data.Attoparsec.Char8
-import Data.Attoparsec.Combinator
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
