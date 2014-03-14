@@ -72,11 +72,12 @@ lineParser = go id
         Nothing -> go (BS.append bs)
         Just n  -> do
           let here = killCR $ BS.take n bs
-              rest = killCR $ BS.drop (n + 1) bs
+              rest = BS.drop (n + 1) bs
           unDraw rest
           return here
 
     killCR bs
       | BS.null bs = bs
-      | BS.last bs == '\n' = BS.init bs
+      | BS.head bs == '\n' || BS.head bs == '\r' = killCR $ BS.tail bs
+      | BS.last bs == '\n' || BS.last bs == '\r' = killCR $ BS.init bs
       | otherwise = bs

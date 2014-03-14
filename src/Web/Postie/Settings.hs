@@ -21,6 +21,8 @@ import System.IO (hPrint, stderr)
 import System.IO.Error (ioeGetErrorType)
 import Data.ByteString (ByteString)
 
+import System.Timeout
+
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
@@ -31,7 +33,7 @@ import Control.Applicative ((<$>))
 -- | Settings to configure posties behaviour.
 data Settings = Settings {
     settingsPort            :: PortID -- ^ Port postie will run on.
-  , settingsTimeout         :: Int    -- ^ Timeout for connections.
+  , settingsTimeout         :: Int    -- ^ Timeout for connections in seconds
   , settingsMaxDataSize     :: Int    -- ^ Maximal size of incoming mail data
   , settingsHost            :: Maybe HostName -- ^ Hostname which is shown in posties greeting.
   , settingsTLS             :: Maybe TLSSettings -- ^ TLS settings if you wish to secure connections.
@@ -47,7 +49,7 @@ data Settings = Settings {
 
 defaultSettings :: Settings
 defaultSettings = Settings {
-    settingsPort             = PortNumber 3001
+    settingsPort            = PortNumber 3001
   , settingsTimeout         = 1800
   , settingsMaxDataSize     = 32000
   , settingsHost            = Nothing

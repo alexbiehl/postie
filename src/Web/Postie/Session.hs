@@ -39,7 +39,7 @@ data Transaction = TxnInitial
 
 runSession :: Settings -> Connection -> Application -> IO ()
 runSession settings connection app =
-  evalStateT session (initialSessionState settings connection app)
+  evalStateT startSession (initialSessionState settings connection app)
 
 initialSessionState :: Settings -> Connection -> Application -> SessionState
 initialSessionState settings connection app = SessionState {
@@ -50,6 +50,12 @@ initialSessionState settings connection app = SessionState {
     , sessionProtocolState   = SMTP.initSmtpFSM
     , sessionTransaction     = TxnInitial
     }
+
+
+startSession :: StateT SessionState IO ()
+startSession = do
+  sendReply $ reply 220 "hello!"
+  session
 
 session :: StateT SessionState IO ()
 session = do
@@ -120,7 +126,9 @@ handleEvent StartData       = do
     app    <- gets sessionApp
     result <- liftIO $ app mail
     case result of
-      Accepted -> sendReply ok
+      Accepted -> do
+        sendReply ok
+        modify (\ss -> ss { sessionTransaction = TxnInitial })
       Rejected -> sendReply reject
   where
     maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
@@ -130,12 +138,9 @@ handleEvent StartData       = do
 handleEvent WantTls = do
   handler <- settingsOnStartTLS <$> gets sessionSettings
   liftIO $ handler
-
   sendReply ok
-
   conn    <- gets sessionConnection
   conn'   <- liftIO $ connStartTls conn
-
   modify (\ss -> ss {
     sessionConnection      = conn'
   , sessionConnectionInput = connectionP conn'
@@ -165,19 +170,29 @@ handleEvent NeedRcptToFirst = do
 
 getCommand :: StateT SessionState IO SMTP.Command
 getCommand = do
-  input   <- gets sessionConnectionInput
-  result  <- liftIO $ P.evalStateT (attoParser SMTP.parseCommand) input
-  case result of
-    Nothing       -> do
-      sendReply $ reply 500 "Syntax error, command unrecognized"
-      getCommand
-    Just command  -> do
-      return command
+    input   <- gets sessionConnectionInput
+    result  <- liftIO $ P.evalStateT (attoParser SMTP.parseCommand) input
+    case result of
+      Nothing       -> do
+        sendReply $ reply 500 "Syntax error, command unrecognized"
+        getCommand
+      Just command  -> do
+        return command
 
 ehloAdvertisement :: StateT SessionState IO Reply
 ehloAdvertisement = do
-  let extensions = ["8BITMIME"]
-  return $ reply' 250 (extensions ++ ["OK"])
+    stls <- startTls
+    let extensions = ["8BITMIME"] ++ stls
+    return $ reply' 250 (extensions ++ ["OK"])
+  where
+    startTls = do
+      conn <- gets sessionConnection
+      if (not $ connIsSecure conn) ||
+         (connAllowStartTLS conn) ||
+         (connDemandStartTLS conn)
+        then
+          return ["STARTTLS"]
+          else return []
 
 ok :: Reply
 ok = reply 250 "OK"

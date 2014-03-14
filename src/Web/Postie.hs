@@ -29,6 +29,8 @@ import Web.Postie.Pipes (UnexpectedEndOfInputException, TooMuchDataException)
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
 import Network.Socket (Socket, SockAddr, accept, sClose)
 
+import System.Timeout
+
 import Control.Monad (forever, void)
 import Control.Exception as E
 import Control.Concurrent
@@ -77,11 +79,12 @@ runSettingsConnectionMaker settings getConnMaker app = do
     forever $ do
       (mkConn, sockAddr) <- getConnLoop
       void $ forkIOWithUnmask $ \unmask -> do
-        bracket mkConn connClose $ \conn ->
-          unmask .
-          handle onE .
-          bracket_ onOpen onClose
-          $ serveConnection sockAddr settings conn app
+          bracket mkConn connClose $ \conn ->
+            void $ timeout maxDuration $
+              unmask .
+              handle onE .
+              bracket_ onOpen onClose $
+              serveConnection sockAddr settings conn app
       return ()
     return ()
   where
@@ -90,9 +93,12 @@ runSettingsConnectionMaker settings getConnMaker app = do
           threadDelay 1000000
           getConnLoop
 
+
     onE     = settingsOnException settings
     onOpen  = settingsOnOpen settings
     onClose = settingsOnClose settings
+
+    maxDuration = (settingsTimeout settings) * 1000000
 
 serveConnection :: SockAddr -> Settings -> Connection -> Application -> IO ()
 serveConnection _  = runSession
