@@ -187,7 +187,7 @@ ehloAdvertisement = do
   where
     startTls = do
       conn <- gets sessionConnection
-      if (not $ connIsSecure conn) ||
+      if (not $ connIsSecure conn) &&
          (connAllowStartTLS conn) ||
          (connDemandStartTLS conn)
         then
