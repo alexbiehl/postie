@@ -8,6 +8,7 @@ module Web.Postie(
 
   , module Web.Postie.Types
   , module Web.Postie.Settings
+  , module Web.Postie.Address
 
   , UnexpectedEndOfInputException
   , TooMuchDataException
@@ -19,6 +20,7 @@ module Web.Postie(
   , (P.>->)
   ) where
 
+import Web.Postie.Address
 import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.Types
