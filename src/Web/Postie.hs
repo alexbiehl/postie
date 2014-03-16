@@ -2,20 +2,32 @@
 
 module Web.Postie(
     run
+    -- | Runs server with a given application on a specified port
+  , runSettings
+    -- | Runs server with a given application and settings
   , runSettingsSocket
+    -- | Runs server with a given application, settings and socket
   , runSettingsConnection
+    -- | Runs server with a given application, settings and an action to open new connections
   , runSettingsConnectionMaker
 
+  -- * Application
   , module Web.Postie.Types
+
+  -- * Settings
   , module Web.Postie.Settings
+
+  -- * Address
   , module Web.Postie.Address
 
+  -- * Exceptions
   , UnexpectedEndOfInputException
   , TooMuchDataException
 
+  -- * Re-exports
+  -- $reexports
   , P.Producer
   , P.Consumer
-  , P.await
   , P.runEffect
   , (P.>->)
   ) where

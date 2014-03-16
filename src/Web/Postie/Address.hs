@@ -15,9 +15,10 @@ import qualified Data.ByteString.Char8 as BS
 
 import Control.Applicative
 
+-- | Represents email address as local and domain parts
 data Address = Address {
-    addressLocalPart :: !BS.ByteString
-  , addressDomain    :: BS.ByteString
+    addressLocalPart :: !BS.ByteString -- ^ local part of email address
+  , addressDomain    :: !BS.ByteString -- ^ domain part of email address
   }
   deriving (Eq, Ord, Typeable)
 
@@ -27,11 +28,11 @@ instance Show Address where
 instance IsString Address where
   fromString = either (error "invalid email literal") id . parseOnly addrSpec . BS.pack
 
+-- | Formats Address to canonical string.
 toByteString :: Address -> BS.ByteString
 toByteString (Address l d) = BS.concat [l, BS.singleton '@', d]
 
--- Borrowed form email-validate-2.0.1
-
+-- | Borrowed form email-validate-2.0.1. Parser for email address.
 addrSpec :: Parser Address
 addrSpec = do
 	localPart <- local

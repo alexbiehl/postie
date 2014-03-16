@@ -7,6 +7,10 @@ license-file: LICENSE
 maintainer: alex.biehl@gmail.com
 author: Alex Biehl
 data-dir: ""
+description:
+  `postie` is a little smtp server library for receiving emails. It is currently
+  in a very early stage and not yet standard compatible although the standard
+  use cases, e.g. receiving emails already work.
 
 library
     build-depends: base >=4, network >=2.4.1.2, bytestring >=0.10.0.2,
