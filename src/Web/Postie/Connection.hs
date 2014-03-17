@@ -42,11 +42,13 @@ data Connection = Connection {
   , connStartTls       :: IO Connection -- ^Creates new connection which is secured by TLS.
   }
 
-data StartTLSPolicy = Allow ServerParams | Demand ServerParams | NotAvailable
+data StartTLSPolicy = Always ServerParams | Allow ServerParams | Demand ServerParams | NotAvailable
 
 -- | Upgradeable connection from Socket
 socketConnection :: Socket -> StartTLSPolicy -> IO Connection
-socketConnection socket policy = return connection
+socketConnection socket policy     = case policy of
+                                      (Always _) -> secureConnection
+                                      _          -> return connection
   where
     connection = Connection {
       connRecv     = recv socket defaultChunkSize
@@ -73,6 +75,7 @@ socketConnection socket policy = return connection
     params = case policy of
       (Allow p)  -> p
       (Demand p) -> p
+      (Always p) -> p
       _          -> error "no upgrade allowed"
 
 connAllowStartTLS :: Connection -> Bool

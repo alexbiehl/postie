@@ -3,13 +3,14 @@ module Web.Postie.Settings(
     Settings(..)
   , defaultSettings
   , TLSSettings(..)
-  , ConnectionSecurity(..)
+  , StartTLSPolicy(..)
   , tlsSettings
   , defaultTLSSettings
   , defaultExceptionHandler
   , settingsServerParams
-  , settingsAllowSecure
-  , settingsDemandSecure
+  , settingsConnectWithTLS
+  , settingsAllowStartTLS
+  , settingsDemandStartTLS
   ) where
 
 import Web.Postie.Types
@@ -68,21 +69,23 @@ defaultSettings = Settings {
 data TLSSettings = TLSSettings {
     certFile           :: FilePath -- ^ Path to certificate file
   , keyFile            :: FilePath  -- ^ Path to private key file belonging to certificate
-  , security           :: ConnectionSecurity -- ^ Connection security mode
+  , security           :: StartTLSPolicy -- ^ Connection security mode
   , tlsLogging         :: TLS.Logging -- ^ Logging for TLS
   , tlsAllowedVersions :: [TLS.Version] -- ^ Supported TLS versions
   , tlsCiphers         :: [TLS.Cipher] -- ^ Supported ciphers
   }
 
-data ConnectionSecurity = AllowSecure -- ^ Allows clients to use STARTTLS command
-                        | DemandSecure -- ^ Client needs to send STARTTLS command before issuing a mail transaction
-                        deriving (Eq, Show)
+-- | Connection security policy, either via STARTTLS command or on connection initiation.
+data StartTLSPolicy = AllowStartTLS -- ^ Allows clients to use STARTTLS command
+                    | DemandStartTLS -- ^ Client needs to send STARTTLS command before issuing a mail transaction
+                    | ConnectWithTLS -- ^ Negotiates a TSL context on connection startup.
+                    deriving (Eq, Show)
 
 defaultTLSSettings :: TLSSettings
 defaultTLSSettings = TLSSettings {
     certFile           = "certificate.pem"
   , keyFile            = "key.pem"
-  , security           = DemandSecure
+  , security           = DemandStartTLS
   , tlsLogging         = def
   , tlsAllowedVersions = [TLS.SSL3,TLS.TLS10,TLS.TLS11,TLS.TLS12]
   , tlsCiphers         = TLS.ciphersuite_all
@@ -95,13 +98,17 @@ tlsSettings cert key = defaultTLSSettings {
   , keyFile  = key
   }
 
-settingsAllowSecure :: Settings -> Bool
-settingsAllowSecure settings =
-  maybe False (== AllowSecure) $ settingsTLS settings >>= return . security
+settingsConnectWithTLS :: Settings -> Bool
+settingsConnectWithTLS settings =
+  maybe False (== ConnectWithTLS) $ settingsTLS settings >>= return . security
 
-settingsDemandSecure :: Settings -> Bool
-settingsDemandSecure settings =
-  maybe False (== DemandSecure) $ settingsTLS settings >>= return . security
+settingsAllowStartTLS :: Settings -> Bool
+settingsAllowStartTLS settings =
+  maybe False (== AllowStartTLS) $ settingsTLS settings >>= return . security
+
+settingsDemandStartTLS :: Settings -> Bool
+settingsDemandStartTLS settings =
+  maybe False (== DemandStartTLS) $ settingsTLS settings >>= return . security
 
 settingsServerParams :: Settings -> IO (Maybe TLS.ServerParams)
 settingsServerParams settings = do

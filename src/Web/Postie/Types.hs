@@ -22,4 +22,5 @@ data Mail = Mail {
   }
 
 -- | Application which receives Mails from postie
+--   An Application has to fully consume the mailBody part of a mail, the behaviour is undefined if not. 
 type Application = Mail -> IO HandlerResponse

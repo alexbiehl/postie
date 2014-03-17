@@ -6,10 +6,6 @@ module Web.Postie(
   , runSettings
     -- | Runs server with a given application and settings
   , runSettingsSocket
-    -- | Runs server with a given application, settings and socket
-  , runSettingsConnection
-    -- | Runs server with a given application, settings and an action to open new connections
-  , runSettingsConnectionMaker
 
   -- * Application
   , module Web.Postie.Types
@@ -68,9 +64,10 @@ runSettingsSocket settings socket app = do
     startTlsPolicy = do
       tlsServerParams <- settingsServerParams settings
       return $ case tlsServerParams of
-        (Just params) | settingsDemandSecure settings -> Demand params
-                      | settingsAllowSecure settings  -> Allow params
-        _                                             -> NotAvailable
+        (Just params) | settingsDemandStartTLS settings -> Demand params
+                      | settingsAllowStartTLS settings  -> Allow params
+                      | settingsConnectWithTLS settings -> Always params
+        _                                               -> NotAvailable
 
     getConn policy = do
       (s, sa) <- accept socket

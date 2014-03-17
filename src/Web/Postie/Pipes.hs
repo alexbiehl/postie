@@ -43,7 +43,7 @@ attoParser p = do
 dataChunks :: Int -> Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
 dataChunks n p = lines p >-> go n
   where
-    go remaining | remaining <= 0 = throw UnexpectedEndOfInputException
+    go remaining | remaining <= 0 = throw TooMuchDataException
     go remaining = do
       bs <- await
       unless (bs == ".") $ do
