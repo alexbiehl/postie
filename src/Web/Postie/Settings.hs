@@ -3,6 +3,7 @@ module Web.Postie.Settings(
     Settings(..)
   , defaultSettings
   , TLSSettings(..)
+  , ConnectionSecurity(..)
   , tlsSettings
   , defaultTLSSettings
   , defaultExceptionHandler
@@ -39,12 +40,13 @@ data Settings = Settings {
   , settingsOnOpen          :: IO () -- ^ Action will be performed when connection has been opened.
   , settingsOnClose         :: IO () -- ^ Action will be performed when connection has been closed.
   , settingsBeforeMainLoop  :: IO () -- ^ Action will be performed before main processing begins.
-  , settingsOnStartTLS      :: IO ()
-  , settingsOnHello         :: ByteString -> IO HandlerResponse
-  , settingsOnMailFrom      :: Address -> IO HandlerResponse
-  , settingsOnRecipient     :: Address -> IO HandlerResponse
+  , settingsOnStartTLS      :: IO () -- ^ Action will be performend on STARTTLS command.
+  , settingsOnHello         :: ByteString -> IO HandlerResponse -- ^ Performed when client says hello
+  , settingsOnMailFrom      :: Address -> IO HandlerResponse -- ^ Performed when client starts mail transaction
+  , settingsOnRecipient     :: Address -> IO HandlerResponse -- ^ Performed when client adds recipient to mail transaction.
   }
 
+-- | Default settings for postie
 defaultSettings :: Settings
 defaultSettings = Settings {
     settingsPort            = PortNumber 3001
@@ -62,17 +64,18 @@ defaultSettings = Settings {
   , settingsOnRecipient     = const $ return Accepted
   }
 
+-- | Settings for TLS handling
 data TLSSettings = TLSSettings {
-    certFile           :: FilePath
-  , keyFile            :: FilePath
-  , security           :: ConnectionSecurity
-  , tlsLogging         :: TLS.Logging
-  , tlsAllowedVersions :: [TLS.Version]
-  , tlsCiphers         :: [TLS.Cipher]
+    certFile           :: FilePath -- ^ Path to certificate file
+  , keyFile            :: FilePath  -- ^ Path to private key file belonging to certificate
+  , security           :: ConnectionSecurity -- ^ Connection security mode
+  , tlsLogging         :: TLS.Logging -- ^ Logging for TLS
+  , tlsAllowedVersions :: [TLS.Version] -- ^ Supported TLS versions
+  , tlsCiphers         :: [TLS.Cipher] -- ^ Supported ciphers
   }
 
-data ConnectionSecurity = AllowSecure
-                        | DemandSecure
+data ConnectionSecurity = AllowSecure -- ^ Allows clients to use STARTTLS command
+                        | DemandSecure -- ^ Client needs to send STARTTLS command before issuing a mail transaction
                         deriving (Eq, Show)
 
 defaultTLSSettings :: TLSSettings
@@ -85,6 +88,7 @@ defaultTLSSettings = TLSSettings {
   , tlsCiphers         = TLS.ciphersuite_all
   }
 
+-- | Convenience function for creation of TLSSettings taking certificate and key file paths as parameters.
 tlsSettings :: FilePath -> FilePath -> TLSSettings
 tlsSettings cert key = defaultTLSSettings {
     certFile = cert
