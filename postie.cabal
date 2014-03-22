@@ -33,10 +33,10 @@ library
                    Web.Postie.Protocol Web.Postie.Pipes Web.Postie.Address
     ghc-options: -O2 -Wall
 
-executable simple
-    build-depends: base -any, bytestring >=0.10.0.2, tls >=1.2.2,
-                   data-default-class >=0.0.1, pipes >=4.1.0,
-                   pipes-bytestring >=2.0.1, postie -any
+executable postie-example-simple
+    build-depends: base, bytestring, tls,
+                   data-default-class, pipes,
+                   pipes-bytestring, postie
     main-is: Simple.hs
     if flag(examples)
       buildable: True
