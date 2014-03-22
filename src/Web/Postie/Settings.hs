@@ -17,8 +17,6 @@ import Web.Postie.Types
 import Web.Postie.Address
 
 import Network (HostName, PortID(..))
-import Control.Exception
-import GHC.IO.Exception (IOErrorType(..))
 import System.IO (hPrint, stderr)
 import System.IO.Error (ioeGetErrorType)
 import Data.ByteString (ByteString)
@@ -27,7 +25,12 @@ import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
 import Data.Default.Class
+import Data.Maybe (fromMaybe)
 
+import Control.Exception
+import GHC.IO.Exception (IOErrorType(..))
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Maybe
 import Control.Applicative ((<$>))
 
 -- | Settings to configure posties behaviour.
@@ -99,43 +102,40 @@ tlsSettings cert key = defaultTLSSettings {
   }
 
 settingsConnectWithTLS :: Settings -> Bool
-settingsConnectWithTLS settings =
-  maybe False (== ConnectWithTLS) $ settingsTLS settings >>= return . security
+settingsConnectWithTLS = checkSecurity ConnectWithTLS
 
 settingsAllowStartTLS :: Settings -> Bool
-settingsAllowStartTLS settings =
-  maybe False (== AllowStartTLS) $ settingsTLS settings >>= return . security
+settingsAllowStartTLS = checkSecurity AllowStartTLS
 
 settingsDemandStartTLS :: Settings -> Bool
-settingsDemandStartTLS settings =
-  maybe False (== DemandStartTLS) $ settingsTLS settings >>= return . security
+settingsDemandStartTLS = checkSecurity DemandStartTLS
+
+checkSecurity :: StartTLSPolicy -> Settings -> Bool
+checkSecurity p s = fromMaybe False $ do
+  tlss <- settingsTLS s
+  return (security tlss == p)
 
 settingsServerParams :: Settings -> IO (Maybe TLS.ServerParams)
-settingsServerParams settings = do
-    case settingsTLS settings of
-      Just ts   -> do
-                     params <- mkServerParams ts
-                     return $ Just params
-      _         -> return Nothing
-  where
-    mkServerParams tls = do
-      credential <- either (throw . TLS.Error_Certificate) id <$>
-        TLS.credentialLoadX509 (certFile tls) (keyFile tls)
-
-      return def {
-        TLS.serverShared = def {
-          TLS.sharedCredentials = TLS.Credentials [credential]
-        },
-        TLS.serverSupported = def {
-          TLS.supportedCiphers  = (tlsCiphers tls)
-        , TLS.supportedVersions = (tlsAllowedVersions tls)
-        }
+settingsServerParams settings = runMaybeT $ do
+    tlss        <- MaybeT . return $ settingsTLS settings
+    credential  <- lift $ loadCredentials tlss
+    return def {
+      TLS.serverShared = def {
+        TLS.sharedCredentials = TLS.Credentials [credential]
+      },
+      TLS.serverSupported = def {
+        TLS.supportedCiphers  = (tlsCiphers tlss)
+      , TLS.supportedVersions = (tlsAllowedVersions tlss)
       }
+    }
+  where
+    loadCredentials tlss = either (throw . TLS.Error_Certificate) id <$>
+        TLS.credentialLoadX509 (certFile tlss) (keyFile tlss)
 
 defaultExceptionHandler :: SomeException -> IO ()
 defaultExceptionHandler e = throwIO e `catches` handlers
   where
-    handlers = [Handler ah, Handler oh, Handler sh]
+    handlers = [Handler ah, Handler oh, Handler th, Handler sh]
 
     ah :: AsyncException -> IO ()
     ah ThreadKilled = return ()
@@ -147,6 +147,13 @@ defaultExceptionHandler e = throwIO e `catches` handlers
       | otherwise         = hPrint stderr x
       where
         et = ioeGetErrorType x
+
+    th :: TLS.TLSError -> IO ()
+    th TLS.Error_EOF                = return ()
+    th (TLS.Error_Packet_Parsing _) = return ()
+    th (TLS.Error_Packet _)         = return ()
+    th (TLS.Error_Protocol _)       = return ()
+    th x                            = hPrint stderr x
 
     sh :: SomeException -> IO ()
     sh x = hPrint stderr x
