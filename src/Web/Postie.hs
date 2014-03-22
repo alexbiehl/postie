@@ -98,7 +98,7 @@ runSettingsConnectionMaker settings getConnMaker app = do
       return ()
     return ()
   where
-    getConnLoop = getConnMaker `E.catch` \(e :: IOException) -> do
+    getConnLoop = getConnMaker `E.catch` \(e :: SomeException) -> do
           onE (toException e)
           threadDelay 1000000
           getConnLoop
