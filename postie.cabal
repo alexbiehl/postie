@@ -12,13 +12,17 @@ description: `postie` is a little smtp server library for receiving emails. It i
              protocol is already supported.
              .
              * At the time of writing parameters on smtp commands can not be parsed.
+             .
              * Handler functions need to return more detailed information to cancel a transaction.
              .
              `postie` supportes hooks on key commands in an smtp session like
              .
              * on connection open and close
+             .
              * on /MAIL FROM/ command e.g. to intercept transaction if sender is blacklisted
+             .
              * on /RCPT TO/ command e.g. to check if recipient is existent on your server
+             .
              * and many more
              .
              To run `postie` you only need to supply a function which takes a `Mail` and
