@@ -111,6 +111,7 @@ handleEvent (AddRcptTo x)   = do
                 let txn' = case txn of
                           (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
                           (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
+                          _                       -> error "impossible"
                 modify (\ss -> ss {sessionTransaction = txn' })
                 sendReply ok
     _        -> sendReply reject
@@ -139,6 +140,7 @@ handleEvent WantTls = do
   modify (\ss -> ss {
     sessionConnection      = conn'
   , sessionConnectionInput = connectionP conn'
+  , sessionTransaction     = TxnInitial
   })
 
 handleEvent WantReset = do
@@ -162,6 +164,8 @@ handleEvent NeedMailFromFirst = do
 
 handleEvent NeedRcptToFirst = do
   sendReply $ reply 503 "Need RCPT TO first"
+
+handleEvent _ = error "impossible"
 
 getCommand :: StateT SessionState IO SMTP.Command
 getCommand = do
