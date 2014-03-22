@@ -5,9 +5,16 @@ import Web.Postie
 
 import Pipes.ByteString (stdout)
 
+settings :: Settings
+settings = defaultSettings {
+    settingsTLS = Just $ (tlsSettings "server.crt" "server.key") {
+      security = ConnectWithTLS
+    }
+  }
+
 main :: IO ()
 main = do
-    run 8080 app
+    runSettings settings app
   where
     app (Mail _ _ body) = do
       runEffect $ body >-> stdout
