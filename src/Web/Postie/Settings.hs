@@ -7,7 +7,7 @@ module Web.Postie.Settings(
   , tlsSettings
   , defaultTLSSettings
   , defaultExceptionHandler
-  , settingsServerParams
+  , settingsStartTLSPolicy
   , settingsConnectWithTLS
   , settingsAllowStartTLS
   , settingsDemandStartTLS
@@ -15,6 +15,7 @@ module Web.Postie.Settings(
 
 import Web.Postie.Types
 import Web.Postie.Address
+import qualified Web.Postie.Connection as Connection
 
 import Network (HostName, PortID(..))
 import System.IO (hPrint, stderr)
@@ -114,6 +115,15 @@ checkSecurity :: StartTLSPolicy -> Settings -> Bool
 checkSecurity p s = fromMaybe False $ do
   tlss <- settingsTLS s
   return (security tlss == p)
+
+settingsStartTLSPolicy :: Settings -> IO Connection.StartTLSPolicy
+settingsStartTLSPolicy settings = do
+  mserverParams <- settingsServerParams settings
+  return $ case mserverParams of
+    (Just params) | settingsDemandStartTLS settings -> Connection.Demand params
+                  | settingsAllowStartTLS settings  -> Connection.Allow params
+                  | settingsConnectWithTLS settings -> Connection.Always params
+    _                                               -> Connection.NotAvailable
 
 settingsServerParams :: Settings -> IO (Maybe TLS.ServerParams)
 settingsServerParams settings = runMaybeT $ do

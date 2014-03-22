@@ -7,6 +7,7 @@ module Web.Postie.Connection(
     connClose,
     connIsSecure,
 
+    connStartTlsPolicy,
     connStartTls,
     connAllowStartTLS,
     connDemandStartTLS,
@@ -46,9 +47,7 @@ data StartTLSPolicy = Always ServerParams | Allow ServerParams | Demand ServerPa
 
 -- | Upgradeable connection from Socket
 socketConnection :: Socket -> StartTLSPolicy -> IO Connection
-socketConnection socket policy     = case policy of
-                                      (Always _) -> secureConnection
-                                      _          -> return connection
+socketConnection socket policy     = return connection
   where
     connection = Connection {
       connRecv     = recv socket defaultChunkSize

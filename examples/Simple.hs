@@ -8,7 +8,7 @@ import Pipes.ByteString (stdout)
 settings :: Settings
 settings = defaultSettings {
     settingsTLS = Just $ (tlsSettings "server.crt" "server.key") {
-      security = ConnectWithTLS
+      security = DemandStartTLS
     }
   }
 

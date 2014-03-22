@@ -58,17 +58,9 @@ runSettings settings app = withSocketsDo $
 
 runSettingsSocket :: Settings -> Socket -> Application -> IO ()
 runSettingsSocket settings socket app = do
-    policy <- startTlsPolicy
+    policy <- settingsStartTLSPolicy settings
     runSettingsConnection settings (getConn policy) app
   where
-    startTlsPolicy = do
-      tlsServerParams <- settingsServerParams settings
-      return $ case tlsServerParams of
-        (Just params) | settingsDemandStartTLS settings -> Demand params
-                      | settingsAllowStartTLS settings  -> Allow params
-                      | settingsConnectWithTLS settings -> Always params
-        _                                               -> NotAvailable
-
     getConn policy = do
       (s, sa) <- accept socket
       conn <- socketConnection s policy
@@ -80,7 +72,10 @@ runSettingsConnection settings getConn = runSettingsConnectionMaker settings get
     getConnMaker = do
       (conn, sa) <- getConn
       let mkConn = do
-            return conn
+            case connStartTlsPolicy conn of
+              (Always _) -> connStartTls conn
+              _          -> return conn
+
       return (mkConn, sa)
 
 runSettingsConnectionMaker :: Settings -> IO (IO Connection, SockAddr) -> Application -> IO ()
@@ -98,11 +93,10 @@ runSettingsConnectionMaker settings getConnMaker app = do
       return ()
     return ()
   where
-    getConnLoop = getConnMaker `E.catch` \(e :: SomeException) -> do
+    getConnLoop = getConnMaker `E.catch` \(e :: IOException) -> do
           onE (toException e)
           threadDelay 1000000
           getConnLoop
-
 
     onE     = settingsOnException settings
     onOpen  = settingsOnOpen settings
