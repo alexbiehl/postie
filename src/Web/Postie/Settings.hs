@@ -145,7 +145,7 @@ settingsServerParams settings = runMaybeT $ do
 defaultExceptionHandler :: SomeException -> IO ()
 defaultExceptionHandler e = throwIO e `catches` handlers
   where
-    handlers = [Handler ah, Handler oh, Handler th, Handler sh]
+    handlers = [Handler ah, Handler oh, Handler tlsh, Handler th, Handler sh]
 
     ah :: AsyncException -> IO ()
     ah ThreadKilled = return ()
@@ -157,6 +157,11 @@ defaultExceptionHandler e = throwIO e `catches` handlers
       | otherwise         = hPrint stderr x
       where
         et = ioeGetErrorType x
+
+    tlsh :: TLS.TLSException -> IO ()
+    tlsh (TLS.Terminated _ _ _)     = return ()
+    tlsh (TLS.HandshakeFailed _)    = return ()
+    tlsh x                          = hPrint stderr x
 
     th :: TLS.TLSError -> IO ()
     th TLS.Error_EOF                = return ()
