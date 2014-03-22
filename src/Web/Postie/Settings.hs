@@ -69,7 +69,7 @@ defaultSettings = Settings {
 data TLSSettings = TLSSettings {
     certFile           :: FilePath -- ^ Path to certificate file
   , keyFile            :: FilePath  -- ^ Path to private key file belonging to certificate
-  , security           :: StartTLSPolicy -- ^ Connection security mode
+  , security           :: StartTLSPolicy -- ^ Connection security mode, default is DemandStartTLS
   , tlsLogging         :: TLS.Logging -- ^ Logging for TLS
   , tlsAllowedVersions :: [TLS.Version] -- ^ Supported TLS versions
   , tlsCiphers         :: [TLS.Cipher] -- ^ Supported ciphers
