@@ -155,10 +155,10 @@ parseHello f s = f `fmap` parser
     parser = stringCI s *> char ' ' *> takeWhile (notInClass "\r ")
 
 parseHelo :: Parser Command
-parseHelo = parseHello Helo "HELO"
+parseHelo = parseHello Helo "helo"
 
 parseEhlo :: Parser Command
-parseEhlo = parseHello Ehlo "EHLO"
+parseEhlo = parseHello Ehlo "ehlo"
 
 parseMailFrom :: Parser Command
 parseMailFrom = stringCI "mail from:<" *> (MailFrom `fmap` addrSpec) <* char '>'
