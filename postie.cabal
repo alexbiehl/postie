@@ -1,12 +1,12 @@
 name: postie
-version: 0.3.0.0
+version: 0.3.1.0
 cabal-version: >=1.10
 build-type: Simple
 license: BSD3
 license-file: LICENSE
 maintainer: alex.biehl@gmail.com
-synopsis: A library to receive emails from within Haskell programs.
-category:
+synopsis: SMTP server library to receive emails from within Haskell programs.
+category: SMTP
 description: `postie` is a little smtp server library for receiving emails. It is currently
              in a very early stage and not yet fully standard compatible although the standard
              protocol is already supported.
@@ -32,7 +32,6 @@ description: `postie` is a little smtp server library for receiving emails. It i
              the mail data. Eventually I will create a seperate package for parsing mime
              messages with `pipes-parse` when postie becomes more stable and standard compliant.
 author: Alex Biehl
-data-dir: ""
 
 source-repository head
     type: git
