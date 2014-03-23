@@ -6,7 +6,7 @@ license: BSD3
 license-file: LICENSE
 maintainer: alex.biehl@gmail.com
 synopsis: SMTP server library to receive emails from within Haskell programs.
-category: SMTP
+category: Network
 description: `postie` is a little smtp server library for receiving emails. It is currently
              in a very early stage and not yet fully standard compatible although the standard
              protocol is already supported.
