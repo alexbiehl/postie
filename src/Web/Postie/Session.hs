@@ -1,6 +1,7 @@
 
 module Web.Postie.Session(
     runSession
+  , mkSessionID
   ) where
 
 import Prelude hiding (lines)
@@ -13,6 +14,7 @@ import Web.Postie.Protocol (Event(..), Reply, reply, reply', renderReply)
 import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
+import Data.UUID.V4
 import qualified Data.ByteString.Char8 as BS
 
 import qualified Pipes.Parse as P
@@ -21,7 +23,8 @@ import Control.Applicative
 import Control.Monad.State
 
 data SessionState = SessionState {
-    sessionApp              :: Application
+    sessionID               :: SessionID
+  , sessionApp              :: Application
   , sessionSettings         :: Settings
   , sessionConnection       :: Connection
   , sessionConnectionInput  :: P.Producer BS.ByteString IO ()
@@ -33,13 +36,17 @@ data Transaction = TxnInitial
                  | TxnHaveMailFrom Address
                  | TxnHaveRecipient Address [Address]
 
-runSession :: Settings -> Connection -> Application -> IO ()
-runSession settings connection app =
-  evalStateT startSession (initialSessionState settings connection app)
+mkSessionID :: IO SessionID
+mkSessionID = SessionID `fmap` nextRandom
 
-initialSessionState :: Settings -> Connection -> Application -> SessionState
-initialSessionState settings connection app = SessionState {
-      sessionApp             = app
+runSession :: SessionID -> Settings -> Connection -> Application -> IO ()
+runSession sid settings connection app =
+  evalStateT startSession (initialSessionState sid settings connection app)
+
+initialSessionState :: SessionID -> Settings -> Connection -> Application -> SessionState
+initialSessionState sid settings connection app = SessionState {
+      sessionID              = sid
+    , sessionApp             = app
     , sessionSettings        = settings
     , sessionConnection      = connection
     , sessionConnectionInput = connectionP connection
@@ -76,15 +83,17 @@ session = do
 
 handleEvent :: SMTP.Event -> StateT SessionState IO ()
 handleEvent (SayHelo x)      = do
+  sid     <- gets sessionID
   handler <- settingsOnHello <$> gets sessionSettings
-  result  <- liftIO $ handler x
+  result  <- liftIO $ handler sid x
   case result of
     Accepted -> sendReply ok
     _        -> sendReply reject
 
 handleEvent (SayEhlo x)      = do
+  sid     <- gets sessionID
   handler <- settingsOnHello <$> gets sessionSettings
-  result  <- liftIO $ handler x
+  result  <- liftIO $ handler sid x
   case result of
     Accepted -> sendReply =<< ehloAdvertisement
     _        -> sendReply reject
@@ -94,8 +103,9 @@ handleEvent (SayHeloAgain _) = sendReply ok
 handleEvent SayOK            = sendReply ok
 
 handleEvent (SetMailFrom x)  = do
+  sid     <- gets sessionID
   handler <- settingsOnMailFrom <$> gets sessionSettings
-  result  <- liftIO $ handler x
+  result  <- liftIO $ handler sid x
   case result of
     Accepted -> do
       modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
@@ -103,8 +113,9 @@ handleEvent (SetMailFrom x)  = do
     _        -> sendReply reject
 
 handleEvent (AddRcptTo x)   = do
+  sid     <- gets sessionID
   handler <- settingsOnRecipient <$> gets sessionSettings
-  result  <- liftIO $ handler x
+  result  <- liftIO $ handler sid x
   case result of
     Accepted -> do
                 txn <- gets sessionTransaction
@@ -119,7 +130,8 @@ handleEvent (AddRcptTo x)   = do
 handleEvent StartData       = do
     sendReply $ reply 354 "End data with <CR><LF>.<CR><LF>"
     (TxnHaveRecipient sender recipients) <- gets sessionTransaction
-    mail   <- Mail sender recipients <$> chunks
+    sid    <- gets sessionID
+    mail   <- Mail sid sender recipients <$> chunks
     app    <- gets sessionApp
     result <- liftIO $ app mail
     case result of
@@ -132,8 +144,9 @@ handleEvent StartData       = do
     chunks            = dataChunks <$> maxDataLength <*> gets sessionConnectionInput
 
 handleEvent WantTls = do
+  sid     <- gets sessionID
   handler <- settingsOnStartTLS <$> gets sessionSettings
-  liftIO $ handler
+  liftIO $ handler sid
   sendReply ok
   conn    <- gets sessionConnection
   conn'   <- liftIO $ connStartTls conn

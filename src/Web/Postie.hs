@@ -84,17 +84,18 @@ runSettingsConnectionMaker settings getConnMaker app = do
     void $ forever $ do
       (mkConn, sockAddr) <- getConnLoop
       void $ forkIOWithUnmask $ \unmask -> do
+          sessionID <- mkSessionID
           bracket mkConn connClose $ \conn ->
             void $ timeout maxDuration $
               unmask .
-              handle onE .
-              bracket_ onOpen onClose $
-              serveConnection sockAddr settings conn app
+              handle (onE $ Just sessionID ).
+              bracket_ (onOpen sessionID) (onClose sessionID) $
+              serveConnection sessionID sockAddr settings conn app
       return ()
     return ()
   where
     getConnLoop = getConnMaker `E.catch` \(e :: IOException) -> do
-          onE (toException e)
+          onE Nothing (toException e)
           threadDelay 1000000
           getConnLoop
 
@@ -104,5 +105,5 @@ runSettingsConnectionMaker settings getConnMaker app = do
 
     maxDuration = (settingsTimeout settings) * 1000000
 
-serveConnection :: SockAddr -> Settings -> Connection -> Application -> IO ()
-serveConnection _  = runSession
+serveConnection :: SessionID -> SockAddr -> Settings -> Connection -> Application -> IO ()
+serveConnection sid _  = runSession sid

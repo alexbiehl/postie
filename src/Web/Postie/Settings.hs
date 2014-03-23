@@ -41,33 +41,36 @@ data Settings = Settings {
   , settingsMaxDataSize     :: Int    -- ^ Maximal size of incoming mail data
   , settingsHost            :: Maybe HostName -- ^ Hostname which is shown in posties greeting.
   , settingsTLS             :: Maybe TLSSettings -- ^ TLS settings if you wish to secure connections.
-  , settingsOnException     :: SomeException -> IO () -- ^ Exception handler (default is defaultExceptionHandler)
-  , settingsOnOpen          :: IO () -- ^ Action will be performed when connection has been opened.
-  , settingsOnClose         :: IO () -- ^ Action will be performed when connection has been closed.
+  , settingsOnException     :: Maybe SessionID -> SomeException -> IO () -- ^ Exception handler (default is defaultExceptionHandler)
   , settingsBeforeMainLoop  :: IO () -- ^ Action will be performed before main processing begins.
-  , settingsOnStartTLS      :: IO () -- ^ Action will be performend on STARTTLS command.
-  , settingsOnHello         :: ByteString -> IO HandlerResponse -- ^ Performed when client says hello
-  , settingsOnMailFrom      :: Address -> IO HandlerResponse -- ^ Performed when client starts mail transaction
-  , settingsOnRecipient     :: Address -> IO HandlerResponse -- ^ Performed when client adds recipient to mail transaction.
+  , settingsOnOpen          :: SessionID -> IO () -- ^ Action will be performed when connection has been opened.
+  , settingsOnClose         :: SessionID -> IO () -- ^ Action will be performed when connection has been closed.
+  , settingsOnStartTLS      :: SessionID -> IO () -- ^ Action will be performend on STARTTLS command.
+  , settingsOnHello         :: SessionID -> ByteString -> IO HandlerResponse -- ^ Performed when client says hello
+  , settingsOnMailFrom      :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client starts mail transaction
+  , settingsOnRecipient     :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client adds recipient to mail transaction.
   }
 
 -- | Default settings for postie
 defaultSettings :: Settings
 defaultSettings = Settings {
-    settingsPort            = PortNumber 3001
-  , settingsTimeout         = 1800
-  , settingsMaxDataSize     = 32000
-  , settingsHost            = Nothing
-  , settingsTLS             = Nothing
-  , settingsOnException     = defaultExceptionHandler
-  , settingsOnOpen          = return ()
-  , settingsOnClose         = return ()
-  , settingsBeforeMainLoop  = return ()
-  , settingsOnStartTLS      = return ()
-  , settingsOnHello         = const $ return Accepted
-  , settingsOnMailFrom      = const $ return Accepted
-  , settingsOnRecipient     = const $ return Accepted
-  }
+      settingsPort            = PortNumber 3001
+    , settingsTimeout         = 1800
+    , settingsMaxDataSize     = 32000
+    , settingsHost            = Nothing
+    , settingsTLS             = Nothing
+    , settingsOnException     = defaultExceptionHandler
+    , settingsBeforeMainLoop  = return ()
+    , settingsOnOpen          = const $ return ()
+    , settingsOnClose         = const $ return ()
+    , settingsOnStartTLS      = const $ return ()
+    , settingsOnHello         = void
+    , settingsOnMailFrom      = void
+    , settingsOnRecipient     = void
+    }
+  where
+    void = \_ _ -> return Accepted
+
 
 -- | Settings for TLS handling
 data TLSSettings = TLSSettings {
@@ -142,8 +145,8 @@ settingsServerParams settings = runMaybeT $ do
     loadCredentials tlss = either (throw . TLS.Error_Certificate) id <$>
         TLS.credentialLoadX509 (certFile tlss) (keyFile tlss)
 
-defaultExceptionHandler :: SomeException -> IO ()
-defaultExceptionHandler e = throwIO e `catches` handlers
+defaultExceptionHandler :: Maybe SessionID -> SomeException -> IO ()
+defaultExceptionHandler _ e = throwIO e `catches` handlers
   where
     handlers = [Handler ah, Handler oh, Handler tlsh, Handler th, Handler sh]
 
