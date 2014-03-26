@@ -23,7 +23,7 @@ data Address = Address {
   deriving (Eq, Ord, Typeable)
 
 instance Show Address where
-  show = show . toByteString
+  show = BS.unpack . toByteString
 
 instance IsString Address where
   fromString = either (error "invalid email literal") id . parseOnly addrSpec . BS.pack
