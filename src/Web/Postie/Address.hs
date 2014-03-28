@@ -1,24 +1,26 @@
 
 module Web.Postie.Address(
-    Address
-  , addressLocalPart
-  , addressDomain
-  , toByteString
+    Address          -- | Represents an email address
+  , address          -- | Returns address from local and domain part
+  , addressLocalPart -- | Returns local part of address
+  , addressDomain    -- | Retuns domain part of address
+  , toByteString     -- | Resulting ByteString has format localPart\@domainPart.
 
+  , parseAddress     -- | Parses a ByteString to Address
   , addrSpec
   ) where
 
 import Data.String
+import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import Data.Attoparsec.Char8
 import qualified Data.ByteString.Char8 as BS
 
 import Control.Applicative
 
--- | Represents email address as local and domain parts
 data Address = Address {
-    addressLocalPart :: !BS.ByteString -- ^ local part of email address
-  , addressDomain    :: !BS.ByteString -- ^ domain part of email address
+    addressLocalPart :: !BS.ByteString
+  , addressDomain    :: !BS.ByteString
   }
   deriving (Eq, Ord, Typeable)
 
@@ -26,13 +28,19 @@ instance Show Address where
   show = BS.unpack . toByteString
 
 instance IsString Address where
-  fromString = either (error "invalid email literal") id . parseOnly addrSpec . BS.pack
+  fromString = fromMaybe (error "invalid email literal") . parseAddress . BS.pack
 
--- | Formats Address to canonical string.
+address :: BS.ByteString -> BS.ByteString -> Address
+address = Address
+
+
 toByteString :: Address -> BS.ByteString
 toByteString (Address l d) = BS.concat [l, BS.singleton '@', d]
 
--- | Borrowed form email-validate-2.0.1. Parser for email address.
+parseAddress :: BS.ByteString -> Maybe Address
+parseAddress = maybeResult . parse addrSpec
+
+-- | Address Parser. Borrowed form email-validate-2.0.1. Parser for email address.
 addrSpec :: Parser Address
 addrSpec = do
 	localPart <- local
