@@ -33,6 +33,7 @@ import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.Types
 import Web.Postie.Session
+import Web.Postie.SessionID
 import Web.Postie.Pipes (UnexpectedEndOfInputException, TooMuchDataException)
 
 import Network (PortID (PortNumber), withSocketsDo, listenOn)

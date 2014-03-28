@@ -10,11 +10,11 @@ import Web.Postie.Address
 import Web.Postie.Types
 import Web.Postie.Settings
 import Web.Postie.Connection
+import Web.Postie.SessionID
 import Web.Postie.Protocol (Event(..), Reply, reply, reply', renderReply)
 import qualified Web.Postie.Protocol as SMTP
 import Web.Postie.Pipes
 
-import Data.UUID.V4
 import qualified Data.ByteString.Char8 as BS
 
 import qualified Pipes.Parse as P
@@ -35,9 +35,6 @@ data SessionState = SessionState {
 data Transaction = TxnInitial
                  | TxnHaveMailFrom Address
                  | TxnHaveRecipient Address [Address]
-
-mkSessionID :: IO SessionID
-mkSessionID = SessionID `fmap` nextRandom
 
 runSession :: SessionID -> Settings -> Connection -> Application -> IO ()
 runSession sid settings connection app =

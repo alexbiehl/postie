@@ -15,6 +15,7 @@ module Web.Postie.Settings(
 
 import Web.Postie.Types
 import Web.Postie.Address
+import Web.Postie.SessionID
 import qualified Web.Postie.Connection as Connection
 
 import Network (HostName, PortID(..))
