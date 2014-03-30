@@ -4,7 +4,9 @@ module Web.Postie.Address(
   , address          -- | Returns address from local and domain part
   , addressLocalPart -- | Returns local part of address
   , addressDomain    -- | Retuns domain part of address
+
   , toByteString     -- | Resulting ByteString has format localPart\@domainPart.
+  , toLazyByteString -- | Resulting Lazy.ByteString has format localPart\@domainPart.
 
   , parseAddress     -- | Parses a ByteString to Address
   , addrSpec
@@ -15,6 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import Data.Attoparsec.Char8
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Applicative
 
@@ -33,9 +36,11 @@ instance IsString Address where
 address :: BS.ByteString -> BS.ByteString -> Address
 address = Address
 
-
 toByteString :: Address -> BS.ByteString
 toByteString (Address l d) = BS.concat [l, BS.singleton '@', d]
+
+toLazyByteString :: Address -> LBS.ByteString
+toLazyByteString (Address l d) = LBS.fromChunks [l, BS.singleton '@', d]
 
 parseAddress :: BS.ByteString -> Maybe Address
 parseAddress = maybeResult . parse addrSpec
