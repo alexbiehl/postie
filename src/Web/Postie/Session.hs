@@ -83,17 +83,14 @@ handleEvent (SayHelo x)      = do
   sid     <- gets sessionID
   handler <- settingsOnHello <$> gets sessionSettings
   result  <- liftIO $ handler sid x
-  case result of
-    Accepted -> sendReply ok
-    _        -> sendReply reject
+  handlerResponse result (sendReply ok)
 
 handleEvent (SayEhlo x)      = do
   sid     <- gets sessionID
   handler <- settingsOnHello <$> gets sessionSettings
   result  <- liftIO $ handler sid x
-  case result of
-    Accepted -> sendReply =<< ehloAdvertisement
-    _        -> sendReply reject
+  handlerResponse result $ do
+    sendReply =<< ehloAdvertisement
 
 handleEvent (SayEhloAgain _) = sendReply ok
 handleEvent (SayHeloAgain _) = sendReply ok
@@ -103,26 +100,22 @@ handleEvent (SetMailFrom x)  = do
   sid     <- gets sessionID
   handler <- settingsOnMailFrom <$> gets sessionSettings
   result  <- liftIO $ handler sid x
-  case result of
-    Accepted -> do
-      modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
-      sendReply ok
-    _        -> sendReply reject
+  handlerResponse result $ do
+    modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
+    sendReply ok
 
 handleEvent (AddRcptTo x)   = do
   sid     <- gets sessionID
   handler <- settingsOnRecipient <$> gets sessionSettings
   result  <- liftIO $ handler sid x
-  case result of
-    Accepted -> do
-                txn <- gets sessionTransaction
-                let txn' = case txn of
-                          (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
-                          (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
-                          _                       -> error "impossible"
-                modify (\ss -> ss {sessionTransaction = txn' })
-                sendReply ok
-    _        -> sendReply reject
+  handlerResponse result $ do
+    txn <- gets sessionTransaction
+    let txn' = case txn of
+              (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
+              (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
+              _                       -> error "impossible"
+    modify (\ss -> ss {sessionTransaction = txn' })
+    sendReply ok
 
 handleEvent StartData       = do
     sendReply $ reply 354 "End data with <CR><LF>.<CR><LF>"
@@ -131,11 +124,9 @@ handleEvent StartData       = do
     mail   <- Mail sid sender recipients <$> chunks
     app    <- gets sessionApp
     result <- liftIO $ app mail
-    case result of
-      Accepted -> do
-        sendReply ok
-        modify (\ss -> ss { sessionTransaction = TxnInitial })
-      Rejected -> sendReply reject
+    handlerResponse result $ do
+      sendReply ok
+      modify (\ss -> ss { sessionTransaction = TxnInitial })
   where
     maxDataLength     = settingsMaxDataSize `fmap` gets sessionSettings
     chunks            = dataChunks <$> maxDataLength <*> gets sessionConnectionInput
@@ -176,6 +167,10 @@ handleEvent NeedRcptToFirst = do
   sendReply $ reply 503 "Need RCPT TO first"
 
 handleEvent _ = error "impossible"
+
+handlerResponse :: HandlerResponse -> StateT SessionState IO () -> StateT SessionState IO ()
+handlerResponse Accepted action = action
+handlerResponse Rejected _      = sendReply reject
 
 getCommand :: StateT SessionState IO SMTP.Command
 getCommand = do
