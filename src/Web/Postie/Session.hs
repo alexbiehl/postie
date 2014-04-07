@@ -37,11 +37,9 @@ data Transaction = TxnInitial
                  | TxnHaveRecipient Address [Address]
 
 runSession :: SessionID -> Settings -> Connection -> Application -> IO ()
-runSession sid settings connection app =
-  evalStateT startSession (initialSessionState sid settings connection app)
-
-initialSessionState :: SessionID -> Settings -> Connection -> Application -> SessionState
-initialSessionState sid settings connection app = SessionState {
+runSession sid settings connection app = evalStateT startSession session
+  where
+    session = SessionState {
       sessionID              = sid
     , sessionApp             = app
     , sessionSettings        = settings
@@ -51,14 +49,13 @@ initialSessionState sid settings connection app = SessionState {
     , sessionTransaction     = TxnInitial
     }
 
-
 startSession :: StateT SessionState IO ()
 startSession = do
   sendReply $ reply 220 "hello!"
-  session
+  sessionLoop
 
-session :: StateT SessionState IO ()
-session = do
+sessionLoop :: StateT SessionState IO ()
+sessionLoop = do
     (event, fsm') <- SMTP.step <$> getSmtpFsm <*> getCommand <*> getTlsStatus
     case event of
       WantQuit -> do
@@ -66,7 +63,7 @@ session = do
         return ()
       _        -> do
         modify (\ss -> ss { sessionProtocolState = fsm' })
-        handleEvent event >> session
+        handleEvent event >> sessionLoop
   where
     getSmtpFsm   = gets sessionProtocolState
     getTlsStatus = do
