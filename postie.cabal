@@ -35,7 +35,7 @@ author: Alex Biehl
 
 source-repository head
     type: git
-    location: https://bitbucket.org/alexbiehl/postie
+    location: https://github.com/alexbiehl/postie.git
 
 flag examples
     Description:  Build examples
