@@ -86,7 +86,7 @@ handleEvent (SayEhlo x)      = do
   sid     <- gets sessionID
   handler <- settingsOnHello <$> gets sessionSettings
   result  <- liftIO $ handler sid x
-  handlerResponse result $ do
+  handlerResponse result $
     sendReply =<< ehloAdvertisement
 
 handleEvent (SayEhloAgain _) = sendReply ok
@@ -145,22 +145,22 @@ handleEvent WantReset = do
   sendReply ok
   modify (\ss -> ss { sessionTransaction = TxnInitial })
 
-handleEvent TlsAlreadyActive = do
+handleEvent TlsAlreadyActive =
   sendReply $ reply 454 "STARTTLS not support (already active)"
 
-handleEvent TlsNotSupported = do
+handleEvent TlsNotSupported =
   sendReply $ reply 454 "STARTTLS not supported"
 
-handleEvent NeedStartTlsFirst = do
+handleEvent NeedStartTlsFirst =
   sendReply $ reply 530 "Issue STARTTLS first"
 
-handleEvent NeedHeloFirst = do
+handleEvent NeedHeloFirst =
   sendReply $ reply 503 "Need EHLO first"
 
-handleEvent NeedMailFromFirst = do
+handleEvent NeedMailFromFirst =
   sendReply $ reply 503 "Need MAIL FROM first"
 
-handleEvent NeedRcptToFirst = do
+handleEvent NeedRcptToFirst =
   sendReply $ reply 503 "Need RCPT TO first"
 
 handleEvent _ = error "impossible"
@@ -177,23 +177,20 @@ getCommand = do
       Nothing       -> do
         sendReply $ reply 500 "Syntax error, command unrecognized"
         getCommand
-      Just command  -> do
-        return command
+      Just command  -> return command
 
 ehloAdvertisement :: StateT SessionState IO Reply
 ehloAdvertisement = do
     stls <- startTls
-    let extensions = ["8BITMIME"] ++ stls
+    let extensions = "8BITMIME" : stls
     return $ reply' 250 (extensions ++ ["OK"])
   where
     startTls = do
       conn <- gets sessionConnection
-      if (not $ connIsSecure conn) &&
-         (connAllowStartTLS conn) ||
-         (connDemandStartTLS conn)
-        then
-          return ["STARTTLS"]
-          else return []
+      return (if not (connIsSecure conn) &&
+         connAllowStartTLS conn ||
+         connDemandStartTLS conn
+        then ["STARTTLS"] else [])
 
 ok :: Reply
 ok = reply 250 "OK"

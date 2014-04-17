@@ -70,7 +70,7 @@ defaultSettings = Settings {
     , settingsOnRecipient     = void
     }
   where
-    void = \_ _ -> return Accepted
+    void _ _ = return Accepted
 
 
 -- | Settings for TLS handling
@@ -138,8 +138,8 @@ settingsServerParams settings = runMaybeT $ do
         TLS.sharedCredentials = TLS.Credentials [credential]
       },
       TLS.serverSupported = def {
-        TLS.supportedCiphers  = (tlsCiphers tlss)
-      , TLS.supportedVersions = (tlsAllowedVersions tlss)
+        TLS.supportedCiphers  = tlsCiphers tlss
+      , TLS.supportedVersions = tlsAllowedVersions tlss
       }
     }
   where
@@ -163,9 +163,9 @@ defaultExceptionHandler _ e = throwIO e `catches` handlers
         et = ioeGetErrorType x
 
     tlsh :: TLS.TLSException -> IO ()
-    tlsh (TLS.Terminated _ _ _)     = return ()
-    tlsh (TLS.HandshakeFailed _)    = return ()
-    tlsh x                          = hPrint stderr x
+    tlsh TLS.Terminated{}      = return ()
+    tlsh TLS.HandshakeFailed{} = return ()
+    tlsh x                     = hPrint stderr x
 
     th :: TLS.TLSError -> IO ()
     th TLS.Error_EOF                = return ()

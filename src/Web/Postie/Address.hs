@@ -20,6 +20,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Applicative
+import Control.Monad (void)
 
 data Address = Address {
     addressLocalPart :: !BS.ByteString
@@ -77,7 +78,7 @@ isDomainText :: Char -> Bool
 isDomainText x = inClass "\33-\90\94-\126" x || isObsNoWsCtl x
 
 quotedString :: Parser BS.ByteString
-quotedString = (\x -> BS.concat $ [BS.singleton '"', BS.concat x, BS.singleton '"']) <$> (between (char '"') (char '"') $
+quotedString = (\x -> BS.concat [BS.singleton '"', BS.concat x, BS.singleton '"']) <$> (between (char '"') (char '"') $
 	many (optional fws >> quotedContent) <* optional fws)
 
 quotedContent :: Parser BS.ByteString
@@ -98,14 +99,14 @@ fws = ignore $
 	<|> ignore (many1 (crlf >> wsp1))
 
 ignore :: Parser a -> Parser ()
-ignore x = x >> return ()
+ignore = void
 
 between :: Parser l -> Parser r -> Parser x -> Parser x
 between l r x = l *> x <* r
 
 comment :: Parser ()
-comment = ignore ((between (char '(') (char ')') $
-	many (ignore commentContent <|> fws)))
+comment = ignore (between (char '(') (char ')') $
+	many (ignore commentContent <|> fws))
 
 commentContent :: Parser ()
 commentContent = skipWhile1 isCommentText <|> ignore quotedPair <|> comment

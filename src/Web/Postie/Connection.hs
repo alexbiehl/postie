@@ -30,6 +30,7 @@ import Data.ByteString.Lazy.Internal (defaultChunkSize)
 
 import Control.Exception (finally)
 import Control.Monad.IO.Class
+import Control.Monad (unless)
 
 import qualified Pipes as P
 
@@ -98,7 +99,5 @@ connectionP :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()
 connectionP conn = go
   where go = do
           bs <- liftIO $ connRecv conn
-          if BS.null bs then
-            return ()
-            else
-              P.yield bs >> go
+          unless (BS.null bs) $
+            P.yield bs >> go

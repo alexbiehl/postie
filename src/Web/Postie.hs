@@ -104,7 +104,7 @@ runSettingsConnectionMaker settings getConnMaker app = do
     onOpen  = settingsOnOpen settings
     onClose = settingsOnClose settings
 
-    maxDuration = (settingsTimeout settings) * 1000000
+    maxDuration = settingsTimeout settings * 1000000
 
 serveConnection :: SessionID -> SockAddr -> Settings -> Connection -> Application -> IO ()
 serveConnection sid _  = runSession sid
