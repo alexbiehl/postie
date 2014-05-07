@@ -101,7 +101,7 @@ runSettingsConnectionMaker settings getConnMaker serverParams app = do
             void $ timeout maxDuration $
               unmask .
               handle (onE $ Just sessionID ).
-              bracket_ (onOpen sessionID) (onClose sessionID) $
+              bracket_ (onOpen sessionID sockAddr) (onClose sessionID) $
               runSession (mkSessionEnv sessionID app settings conn serverParams)
       return ()
     return ()

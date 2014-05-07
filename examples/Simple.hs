@@ -7,7 +7,7 @@ import Pipes.ByteString (stdout)
 
 settings :: Settings
 settings = def {
-    settingsOnOpen = \sid -> do
+    settingsOnOpen = \sid _ -> do
       putStrLn $ show sid ++ " session opened"
     ,
     settingsOnClose = \sid -> do

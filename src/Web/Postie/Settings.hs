@@ -18,6 +18,7 @@ import System.IO (hPrint, stderr)
 import System.IO.Error (ioeGetErrorType)
 import Data.ByteString (ByteString)
 
+import Network.Socket (SockAddr)
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
@@ -36,7 +37,7 @@ data Settings = Settings {
   , settingsTLS             :: Maybe TLSSettings -- ^ TLS settings if you wish to secure connections.
   , settingsOnException     :: Maybe SessionID -> SomeException -> IO () -- ^ Exception handler (default is defaultExceptionHandler)
   , settingsBeforeMainLoop  :: IO () -- ^ Action will be performed before main processing begins.
-  , settingsOnOpen          :: SessionID -> IO () -- ^ Action will be performed when connection has been opened.
+  , settingsOnOpen          :: SessionID -> SockAddr -> IO () -- ^ Action will be performed when connection has been opened.
   , settingsOnClose         :: SessionID -> IO () -- ^ Action will be performed when connection has been closed.
   , settingsOnStartTLS      :: SessionID -> IO () -- ^ Action will be performend on STARTTLS command.
   , settingsOnHello         :: SessionID -> ByteString -> IO HandlerResponse -- ^ Performed when client says hello
@@ -57,7 +58,7 @@ defaultSettings = Settings {
     , settingsTLS             = Nothing
     , settingsOnException     = defaultExceptionHandler
     , settingsBeforeMainLoop  = return ()
-    , settingsOnOpen          = const $ return ()
+    , settingsOnOpen          = \_ _ -> return ()
     , settingsOnClose         = const $ return ()
     , settingsOnStartTLS      = const $ return ()
     , settingsOnHello         = void
