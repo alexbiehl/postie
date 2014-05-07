@@ -26,6 +26,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Applicative
+import Control.Monad (void)
 
 data TlsStatus = Active | Forbidden | Permitted | Required deriving (Eq)
 
@@ -147,7 +148,7 @@ parseCommand = commands <* crlf
                       ]
 
 crlf :: Parser ()
-crlf = char '\r' >> char '\n' >> return ()
+crlf = void $ char '\r' >> char '\n'
 
 parseHello :: (BS.ByteString -> Command) -> BS.ByteString -> Parser Command
 parseHello f s = f `fmap` parser

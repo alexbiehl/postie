@@ -6,7 +6,7 @@ import Web.Postie
 import Pipes.ByteString (stdout)
 
 settings :: Settings
-settings = defaultSettings {
+settings = def {
     settingsOnOpen = \sid -> do
       putStrLn $ show sid ++ " session opened"
     ,

@@ -33,11 +33,11 @@ import Web.Postie.Settings
 import Web.Postie.Connection
 import Web.Postie.Types
 import Web.Postie.Session
-import Web.Postie.SessionID
 import Web.Postie.Pipes (UnexpectedEndOfInputException, TooMuchDataException)
 
 import Network (PortID (PortNumber), withSocketsDo, listenOn)
 import Network.Socket (Socket, SockAddr, accept, sClose)
+import Network.TLS (ServerParams)
 
 import System.Timeout
 
@@ -48,7 +48,7 @@ import Control.Concurrent
 import qualified Pipes as P
 
 run :: Int -> Application -> IO ()
-run port = runSettings (defaultSettings { settingsPort = PortNumber (fromIntegral port) })
+run port = runSettings (def { settingsPort = PortNumber (fromIntegral port) })
 
 runSettings :: Settings -> Application-> IO ()
 runSettings settings app = withSocketsDo $
@@ -58,29 +58,40 @@ runSettings settings app = withSocketsDo $
     port = settingsPort settings
 
 runSettingsSocket :: Settings -> Socket -> Application -> IO ()
-runSettingsSocket settings socket app = do
-    policy <- settingsStartTLSPolicy settings
-    runSettingsConnection settings (getConn policy) app
+runSettingsSocket settings socket app =
+    runSettingsConnection settings getConn app
   where
-    getConn policy = do
+    getConn = do
       (s, sa) <- accept socket
-      conn <- socketConnection s policy
+      conn    <- mkSocketConnection s
       return (conn, sa)
 
 runSettingsConnection :: Settings -> IO (Connection, SockAddr) -> Application -> IO ()
-runSettingsConnection settings getConn = runSettingsConnectionMaker settings getConnMaker
+runSettingsConnection settings getConn app = do
+  serverParams <- mkServerParams'
+  runSettingsConnectionMaker settings (getConnMaker serverParams) serverParams app
   where
-    getConnMaker = do
+    getConnMaker serverParams = do
       (conn, sa) <- getConn
       let mkConn = do
-            case connStartTlsPolicy conn of
-              (Always _) -> connStartTls conn
-              _          -> return conn
-
+            case settingsStartTLSPolicy settings of
+              Just ConnectWithTLS -> do
+                                      let (Just sp) = serverParams
+                                      connSetSecure conn sp
+              _                   -> return ()
+            return conn
       return (mkConn, sa)
 
-runSettingsConnectionMaker :: Settings -> IO (IO Connection, SockAddr) -> Application -> IO ()
-runSettingsConnectionMaker settings getConnMaker app = do
+    mkServerParams' =
+      case settingsTLS settings of
+        Just tls -> do
+                      serverParams <- mkServerParams tls
+                      return (Just serverParams)
+        _        -> return Nothing
+
+runSettingsConnectionMaker :: Settings -> IO (IO Connection, SockAddr)
+                            -> Maybe ServerParams -> Application -> IO ()
+runSettingsConnectionMaker settings getConnMaker serverParams app = do
     settingsBeforeMainLoop settings
     void $ forever $ do
       (mkConn, sockAddr) <- getConnLoop
@@ -91,7 +102,7 @@ runSettingsConnectionMaker settings getConnMaker app = do
               unmask .
               handle (onE $ Just sessionID ).
               bracket_ (onOpen sessionID) (onClose sessionID) $
-              serveConnection sessionID sockAddr settings conn app
+              runSession (mkSessionEnv sessionID app settings conn serverParams)
       return ()
     return ()
   where
@@ -105,6 +116,3 @@ runSettingsConnectionMaker settings getConnMaker app = do
     onClose = settingsOnClose settings
 
     maxDuration = settingsTimeout settings * 1000000
-
-serveConnection :: SessionID -> SockAddr -> Settings -> Connection -> Application -> IO ()
-serveConnection sid _  = runSession sid

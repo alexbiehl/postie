@@ -1,20 +1,12 @@
 module Web.Postie.Connection(
-    Connection,
-    StartTLSPolicy(..),
-
-    connRecv,
-    connSend,
-    connClose,
-    connIsSecure,
-
-    connStartTlsPolicy,
-    connStartTls,
-    connAllowStartTLS,
-    connDemandStartTLS,
-
-    socketConnection,
-
-    connectionP
+    Connection
+  , connIsSecure
+  , connSetSecure
+  , connRecv
+  , connSend
+  , connClose
+  , mkSocketConnection
+  , toProducer
   ) where
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
@@ -28,76 +20,68 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Internal (defaultChunkSize)
 
+import Data.IORef
+
 import Control.Exception (finally)
 import Control.Monad.IO.Class
 import Control.Monad (unless)
 
 import qualified Pipes as P
 
--- |Low-level connection abstraction
-data Connection = Connection {
-    connRecv           :: IO BS.ByteString -- ^ Reads data from connection. Returns empty bytestring if eof is reached.
-  , connSend           :: LBS.ByteString -> IO () -- ^ Sends data over the connection.
-  , connClose          :: IO ()    -- ^Closes the connection.
-  , connIsSecure       :: Bool     -- ^Returns true if this is a TLS-secured connection.
-  , connStartTlsPolicy :: StartTLSPolicy
-  , connStartTls       :: IO Connection -- ^Creates new connection which is secured by TLS.
-  }
+data ConnectionBackend = ConnPlain Socket
+                       | ConnSecure Context
 
-data StartTLSPolicy = Always ServerParams | Allow ServerParams | Demand ServerParams | NotAvailable
+data Connection = Connection (IORef ConnectionBackend)
 
--- | Upgradeable connection from Socket
-socketConnection :: Socket -> StartTLSPolicy -> IO Connection
-socketConnection socket policy     = return connection
+connSetSecure :: Connection -> ServerParams -> IO ()
+connSetSecure (Connection cbe) params = do
+    backend        <- readIORef cbe
+    securedBackend <- upgrade backend
+    writeIORef cbe securedBackend
+  where upgrade (ConnPlain be) = do
+          context <- contextNew be params =<< makeSystem
+          handshake context
+          return (ConnSecure context)
+        upgrade (ConnSecure _) = error "already on secure connection"
+
+connIsSecure :: Connection -> IO Bool
+connIsSecure (Connection cbe) = do
+  backend <- readIORef cbe
+  return $ case backend of
+    (ConnSecure _) -> True
+    _              -> False
+
+mkSocketConnection :: Socket -> IO Connection
+mkSocketConnection socket = do
+    conn <- newIORef (ConnPlain socket)
+    return (Connection conn)
+
+connBackendRecv :: ConnectionBackend -> IO BS.ByteString
+connBackendRecv (ConnPlain socket) = recv socket defaultChunkSize
+connBackendRecv (ConnSecure ctx)   = recvData ctx
+
+connBackendSend :: ConnectionBackend -> LBS.ByteString -> IO ()
+connBackendSend (ConnPlain socket) = sendAll socket
+connBackendSend (ConnSecure ctx)   = sendData ctx
+
+connRecv :: Connection -> IO BS.ByteString
+connRecv (Connection cbe) = readIORef cbe >>= connBackendRecv
+
+connSend :: Connection -> LBS.ByteString -> IO ()
+connSend (Connection cbe) lbs = do
+  backend <- readIORef cbe
+  connBackendSend backend lbs
+
+connClose :: Connection -> IO ()
+connClose (Connection cbe) = closeBackend =<< readIORef cbe
   where
-    connection = Connection {
-      connRecv     = recv socket defaultChunkSize
-    , connSend     = sendAll socket
-    , connClose    = sClose socket
-    , connIsSecure = False
-    , connStartTlsPolicy = policy
-    , connStartTls = secureConnection
-    }
+    closeBackend (ConnPlain socket)   = sClose socket
+    closeBackend (ConnSecure context) = bye context `finally` contextClose context
 
-    secureConnection = do
-      context <- contextNew socket params =<< makeSystem
-      handshake context
-
-      return Connection {
-          connRecv     = recvData context
-        , connSend     = sendData context
-        , connClose    = bye context `finally` contextClose context
-        , connIsSecure = True
-        , connStartTlsPolicy = policy
-        , connStartTls = error "already on secure connection"
-      }
-
-    params = case policy of
-      (Allow p)  -> p
-      (Demand p) -> p
-      (Always p) -> p
-      _          -> error "no upgrade allowed"
-
-connAllowStartTLS :: Connection -> Bool
-connAllowStartTLS conn | connIsSecure conn = False
-                       | allowedByPolicy (connStartTlsPolicy conn) = True
-                       | otherwise         = False
+toProducer :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()
+toProducer conn = go
   where
-    allowedByPolicy (Allow _)   = True
-    allowedByPolicy (Demand _)  = True
-    allowedByPolicy _           = False
-
-connDemandStartTLS :: Connection -> Bool
-connDemandStartTLS conn | connIsSecure conn = False
-                        | demandByPolicy (connStartTlsPolicy conn) = True
-                        | otherwise         = False
-  where
-    demandByPolicy (Demand _) = True
-    demandByPolicy _          = False
-
-connectionP :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()
-connectionP conn = go
-  where go = do
-          bs <- liftIO $ connRecv conn
-          unless (BS.null bs) $
-            P.yield bs >> go
+    go = do
+      bs <- liftIO $ connRecv conn
+      unless (BS.null bs) $
+        P.yield bs >> go

@@ -1,22 +1,17 @@
 
 module Web.Postie.Settings(
     Settings(..)
-  , defaultSettings
   , TLSSettings(..)
   , StartTLSPolicy(..)
-  , tlsSettings
-  , defaultTLSSettings
-  , defaultExceptionHandler
   , settingsStartTLSPolicy
-  , settingsConnectWithTLS
-  , settingsAllowStartTLS
-  , settingsDemandStartTLS
+  , defaultExceptionHandler
+  , mkServerParams
+  , def -- |reexport from Default class
   ) where
 
 import Web.Postie.Types
 import Web.Postie.Address
 import Web.Postie.SessionID
-import qualified Web.Postie.Connection as Connection
 
 import Network (HostName, PortID(..))
 import System.IO (hPrint, stderr)
@@ -27,12 +22,9 @@ import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
 import Data.Default.Class
-import Data.Maybe (fromMaybe)
 
 import Control.Exception
 import GHC.IO.Exception (IOErrorType(..))
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
 import Control.Applicative ((<$>))
 
 -- | Settings to configure posties behaviour.
@@ -51,6 +43,9 @@ data Settings = Settings {
   , settingsOnMailFrom      :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client starts mail transaction
   , settingsOnRecipient     :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client adds recipient to mail transaction.
   }
+
+instance Default Settings where
+  def = defaultSettings
 
 -- | Default settings for postie
 defaultSettings :: Settings
@@ -83,6 +78,9 @@ data TLSSettings = TLSSettings {
   , tlsCiphers         :: [TLS.Cipher] -- ^ Supported ciphers
   }
 
+instance Default TLSSettings where
+  def = defaultTLSSettings
+
 -- | Connection security policy, either via STARTTLS command or on connection initiation.
 data StartTLSPolicy = AllowStartTLS -- ^ Allows clients to use STARTTLS command
                     | DemandStartTLS -- ^ Client needs to send STARTTLS command before issuing a mail transaction
@@ -99,52 +97,24 @@ defaultTLSSettings = TLSSettings {
   , tlsCiphers         = TLS.ciphersuite_all
   }
 
--- | Convenience function for creation of TLSSettings taking certificate and key file paths as parameters.
-tlsSettings :: FilePath -> FilePath -> TLSSettings
-tlsSettings cert key = defaultTLSSettings {
-    certFile = cert
-  , keyFile  = key
-  }
+settingsStartTLSPolicy :: Settings -> Maybe StartTLSPolicy
+settingsStartTLSPolicy settings = security `fmap` settingsTLS settings
 
-settingsConnectWithTLS :: Settings -> Bool
-settingsConnectWithTLS = checkSecurity ConnectWithTLS
-
-settingsAllowStartTLS :: Settings -> Bool
-settingsAllowStartTLS = checkSecurity AllowStartTLS
-
-settingsDemandStartTLS :: Settings -> Bool
-settingsDemandStartTLS = checkSecurity DemandStartTLS
-
-checkSecurity :: StartTLSPolicy -> Settings -> Bool
-checkSecurity p s = fromMaybe False $ do
-  tlss <- settingsTLS s
-  return (security tlss == p)
-
-settingsStartTLSPolicy :: Settings -> IO Connection.StartTLSPolicy
-settingsStartTLSPolicy settings = do
-  mserverParams <- settingsServerParams settings
-  return $ case mserverParams of
-    (Just params) | settingsDemandStartTLS settings -> Connection.Demand params
-                  | settingsAllowStartTLS settings  -> Connection.Allow params
-                  | settingsConnectWithTLS settings -> Connection.Always params
-    _                                               -> Connection.NotAvailable
-
-settingsServerParams :: Settings -> IO (Maybe TLS.ServerParams)
-settingsServerParams settings = runMaybeT $ do
-    tlss        <- MaybeT . return $ settingsTLS settings
-    credential  <- lift $ loadCredentials tlss
+mkServerParams :: TLSSettings -> IO TLS.ServerParams
+mkServerParams tlsSettings = do
+    credentials  <- loadCredentials
     return def {
       TLS.serverShared = def {
-        TLS.sharedCredentials = TLS.Credentials [credential]
+        TLS.sharedCredentials = TLS.Credentials [credentials]
       },
       TLS.serverSupported = def {
-        TLS.supportedCiphers  = tlsCiphers tlss
-      , TLS.supportedVersions = tlsAllowedVersions tlss
+        TLS.supportedCiphers  = tlsCiphers tlsSettings
+      , TLS.supportedVersions = tlsAllowedVersions tlsSettings
       }
     }
   where
-    loadCredentials tlss = either (throw . TLS.Error_Certificate) id <$>
-        TLS.credentialLoadX509 (certFile tlss) (keyFile tlss)
+    loadCredentials = either (throw . TLS.Error_Certificate) id <$>
+        TLS.credentialLoadX509 (certFile tlsSettings) (keyFile tlsSettings)
 
 defaultExceptionHandler :: Maybe SessionID -> SomeException -> IO ()
 defaultExceptionHandler _ e = throwIO e `catches` handlers
