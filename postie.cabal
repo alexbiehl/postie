@@ -1,5 +1,5 @@
 name: postie
-version: 0.4.1.0
+version: 0.5.0.0
 cabal-version: >=1.10
 build-type: Simple
 license: BSD3
