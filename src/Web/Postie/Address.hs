@@ -15,7 +15,7 @@ module Web.Postie.Address(
 import Data.String
 import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
-import Data.Attoparsec.Char8
+import Data.Attoparsec.ByteString.Char8
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
@@ -49,10 +49,10 @@ parseAddress = maybeResult . parse addrSpec
 -- | Address Parser. Borrowed form email-validate-2.0.1. Parser for email address.
 addrSpec :: Parser Address
 addrSpec = do
-	localPart <- local
-	_ <- char '@'
-	domainPart <- domain
-	return (Address localPart domainPart)
+  localPart <- local
+  _ <- char '@'
+  domainPart <- domain
+  return (Address localPart domainPart)
 
 local :: Parser BS.ByteString
 local = dottedAtoms
@@ -62,7 +62,7 @@ domain = dottedAtoms <|> domainLiteral
 
 dottedAtoms :: Parser BS.ByteString
 dottedAtoms = BS.intercalate (BS.singleton '.') <$>
-	(optional cfws *> (atom <|> quotedString) <* optional cfws)	`sepBy1` (char '.')
+  (optional cfws *> (atom <|> quotedString) <* optional cfws)  `sepBy1` char '.'
 
 atom :: Parser BS.ByteString
 atom = takeWhile1 isAtomText
@@ -71,15 +71,15 @@ isAtomText :: Char -> Bool
 isAtomText x = isAlphaNum x || inClass "!#$%&'*+/=?^_`{|}~-" x
 
 domainLiteral :: Parser BS.ByteString
-domainLiteral = (BS.cons '[' . flip BS.snoc ']' . BS.concat) <$> (between (optional cfws *> char '[') (char ']' <* optional cfws) $
-	many (optional fws >> takeWhile1 isDomainText) <* optional fws)
+domainLiteral = (BS.cons '[' . flip BS.snoc ']' . BS.concat) <$> between (optional cfws *> char '[') (char ']' <* optional cfws)
+  (many (optional fws >> takeWhile1 isDomainText) <* optional fws)
 
 isDomainText :: Char -> Bool
 isDomainText x = inClass "\33-\90\94-\126" x || isObsNoWsCtl x
 
 quotedString :: Parser BS.ByteString
-quotedString = (\x -> BS.concat [BS.singleton '"', BS.concat x, BS.singleton '"']) <$> (between (char '"') (char '"') $
-	many (optional fws >> quotedContent) <* optional fws)
+quotedString = (\x -> BS.concat [BS.singleton '"', BS.concat x, BS.singleton '"']) <$> between (char '"') (char '"')
+  (many (optional fws >> quotedContent) <* optional fws)
 
 quotedContent :: Parser BS.ByteString
 quotedContent = takeWhile1 isQuotedText <|> quotedPair
@@ -95,8 +95,8 @@ cfws = ignore $ many (comment <|> fws)
 
 fws :: Parser ()
 fws = ignore $
-	ignore (wsp1 >> optional (crlf >> wsp1))
-	<|> ignore (many1 (crlf >> wsp1))
+  ignore (wsp1 >> optional (crlf >> wsp1))
+  <|> ignore (many1 (crlf >> wsp1))
 
 ignore :: Parser a -> Parser ()
 ignore = void
@@ -106,7 +106,7 @@ between l r x = l *> x <* r
 
 comment :: Parser ()
 comment = ignore (between (char '(') (char ')') $
-	many (ignore commentContent <|> fws))
+  many (ignore commentContent <|> fws))
 
 commentContent :: Parser ()
 commentContent = skipWhile1 isCommentText <|> ignore quotedPair <|> comment

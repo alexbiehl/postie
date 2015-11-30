@@ -6,19 +6,19 @@ module Web.Postie.Pipes(
   , TooMuchDataException
   ) where
 
-import Prelude hiding (lines)
-
 import Pipes
 import Pipes.Parse
 
 import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Attoparsec as AT
+import qualified Data.Attoparsec.ByteString as AT
 
 import Control.Monad (unless)
 import Control.Applicative
 import Control.Exception (throw, Exception)
+
+import Prelude hiding (lines)
 
 data UnexpectedEndOfInputException = UnexpectedEndOfInputException
   deriving (Show, Typeable)

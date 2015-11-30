@@ -17,16 +17,16 @@ module Web.Postie.Protocol(
   , parseMailFrom
   ) where
 
-import Prelude hiding (takeWhile)
-
 import Web.Postie.Address
 
-import Data.Attoparsec.Char8
+import Data.Attoparsec.ByteString.Char8 hiding (match)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Applicative
 import Control.Monad (void)
+
+import Prelude hiding (takeWhile)
 
 data TlsStatus = Active | Forbidden | Permitted | Required deriving (Eq)
 

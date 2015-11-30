@@ -26,7 +26,9 @@ import Data.Default.Class
 
 import Control.Exception
 import GHC.IO.Exception (IOErrorType(..))
-import Control.Applicative ((<$>))
+import Control.Applicative
+
+import Prelude
 
 -- | Settings to configure posties behaviour.
 data Settings = Settings {
@@ -146,4 +148,4 @@ defaultExceptionHandler _ e = throwIO e `catches` handlers
     th x                            = hPrint stderr x
 
     sh :: SomeException -> IO ()
-    sh x = hPrint stderr x
+    sh = hPrint stderr

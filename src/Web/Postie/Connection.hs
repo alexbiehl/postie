@@ -14,7 +14,6 @@ import Network.Socket.ByteString.Lazy (sendAll)
 import Network.Socket.ByteString hiding (sendAll)
 
 import Network.TLS
-import Crypto.Random.AESCtr
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -39,7 +38,7 @@ connSetSecure (Connection cbe) params = do
     securedBackend <- upgrade backend
     writeIORef cbe securedBackend
   where upgrade (ConnPlain be) = do
-          context <- contextNew be params =<< makeSystem
+          context <- contextNew be params
           handshake context
           return (ConnSecure context)
         upgrade (ConnSecure _) = error "already on secure connection"
@@ -52,16 +51,16 @@ connIsSecure (Connection cbe) = do
     _              -> False
 
 mkSocketConnection :: Socket -> IO Connection
-mkSocketConnection socket = do
-    conn <- newIORef (ConnPlain socket)
+mkSocketConnection s = do
+    conn <- newIORef (ConnPlain s)
     return (Connection conn)
 
 connBackendRecv :: ConnectionBackend -> IO BS.ByteString
-connBackendRecv (ConnPlain socket) = recv socket defaultChunkSize
+connBackendRecv (ConnPlain s) = recv s defaultChunkSize
 connBackendRecv (ConnSecure ctx)   = recvData ctx
 
 connBackendSend :: ConnectionBackend -> LBS.ByteString -> IO ()
-connBackendSend (ConnPlain socket) = sendAll socket
+connBackendSend (ConnPlain s) = sendAll s
 connBackendSend (ConnSecure ctx)   = sendData ctx
 
 connRecv :: Connection -> IO BS.ByteString
@@ -75,7 +74,7 @@ connSend (Connection cbe) lbs = do
 connClose :: Connection -> IO ()
 connClose (Connection cbe) = closeBackend =<< readIORef cbe
   where
-    closeBackend (ConnPlain socket)   = sClose socket
+    closeBackend (ConnPlain s)   = sClose s
     closeBackend (ConnSecure context) = bye context `finally` contextClose context
 
 toProducer :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()

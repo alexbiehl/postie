@@ -1,7 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Web.Postie(
-    run
+module Web.Postie
+  ( run
     -- | Runs server with a given application on a specified port
   , runSettings
     -- | Runs server with a given application and settings
@@ -58,8 +59,8 @@ runSettings settings app = withSocketsDo $
     port = settingsPort settings
 
 runSettingsSocket :: Settings -> Socket -> Application -> IO ()
-runSettingsSocket settings socket app =
-    runSettingsConnection settings getConn app
+runSettingsSocket settings socket =
+    runSettingsConnection settings getConn
   where
     getConn = do
       (s, sa) <- accept socket

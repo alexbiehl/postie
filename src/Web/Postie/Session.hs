@@ -5,8 +5,6 @@ module Web.Postie.Session(
   , mkSessionID
   ) where
 
-import Prelude hiding (lines)
-
 import Web.Postie.Address
 import Web.Postie.Types
 import Web.Postie.Settings
@@ -22,6 +20,10 @@ import qualified Network.TLS as TLS
 import Control.Applicative
 import Control.Monad.Reader
 import Control.Monad.State
+
+import Data.ByteString (ByteString)
+
+import Prelude hiding (lines)
 
 data SessionEnv = SessionEnv {
     sessionID           :: SessionID
@@ -84,8 +86,8 @@ sessionLoop = do
                | p == DemandStartTLS -> SMTP.Required
         _                            -> SMTP.Forbidden
 
-handleEvent :: SMTP.Event -> SessionM ()
-handleEvent (SayHelo x)      = do
+handleHelo :: ByteString -> SessionM HandlerResponse
+handleHelo x = do
   SessionEnv {
     sessionID       = sid
   , sessionSettings = settings
@@ -93,18 +95,15 @@ handleEvent (SayHelo x)      = do
 
   let handler = settingsOnHello settings
 
-  result  <- liftIO $ handler sid x
+  liftIO $ handler sid x
+
+handleEvent :: SMTP.Event -> SessionM ()
+handleEvent (SayHelo x)      = do
+  result <- handleHelo x
   handlerResponse result (sendReply ok)
 
 handleEvent (SayEhlo x)      = do
-  SessionEnv {
-    sessionID       = sid
-  , sessionSettings = settings
-  } <- ask
-
-  let handler = settingsOnHello settings
-
-  result  <- liftIO $ handler sid x
+  result <- handleHelo x
   handlerResponse result $
     sendReply =<< ehloAdvertisement
 
