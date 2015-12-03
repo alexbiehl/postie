@@ -221,6 +221,9 @@ handleEvent TlsNotSupported =
 handleEvent NeedStartTlsFirst =
   sendReply $ reply 530 "Issue STARTTLS first"
 
+handleEvent NeedAuthFirst =
+  sendReply $ reply 530 "5.7.1 Authentication required"
+
 handleEvent NeedHeloFirst =
   sendReply $ reply 503 "Need EHLO first"
 

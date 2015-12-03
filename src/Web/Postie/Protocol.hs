@@ -44,7 +44,7 @@ data SessionState = Unknown
 type Mailbox = Address
 
 data Event =  SayHelo BS.ByteString
-           | SayHeloAgain BS.ByteString
+           | SayHeloAgain BS.ByteString
            | SayEhlo BS.ByteString
            | SayEhloAgain BS.ByteString
            | SayOK
