@@ -1,6 +1,7 @@
 
-module Web.Postie.Protocol(
-    TlsStatus(..)
+module Web.Postie.Protocol
+  ( TlsStatus(..)
+  , AuthStatus(..)
   , Mailbox
   , Event(..)
   , Command(..)
@@ -30,6 +31,8 @@ import Prelude hiding (takeWhile)
 
 data TlsStatus = Active | Forbidden | Permitted | Required deriving (Eq)
 
+data AuthStatus = Authed | NoAuth | AuthRequired deriving (Eq)
+
 data SessionState = Unknown
                   | HaveHelo
                   | HaveEhlo
@@ -49,11 +52,13 @@ data Event =  SayHelo BS.ByteString
            | AddRcptTo Mailbox
            | StartData
            | WantTls
+           | WantAuth BS.ByteString
            | WantReset
            | WantQuit
            | TlsAlreadyActive
            | TlsNotSupported
            | NeedStartTlsFirst
+           | NeedAuthFirst
            | NeedHeloFirst
            | NeedMailFromFirst
            | NeedRcptToFirst
@@ -64,46 +69,52 @@ data Command = Helo BS.ByteString
              | MailFrom Mailbox
              | RcptTo Mailbox
              | StartTls
+             | Auth BS.ByteString
              | Data
              | Rset
              | Quit
              deriving (Eq, Show)
 
-newtype SmtpFSM = SmtpFSM { step :: Command -> TlsStatus -> (Event, SmtpFSM) }
+newtype SmtpFSM = SmtpFSM { step :: Command -> TlsStatus -> AuthStatus -> (Event, SmtpFSM) }
 
 initSmtpFSM :: SmtpFSM
 initSmtpFSM = SmtpFSM (handleSmtpCmd Unknown)
 
-handleSmtpCmd :: SessionState -> Command -> TlsStatus -> (Event, SmtpFSM)
-handleSmtpCmd st cmd tlsSt = match tlsSt st cmd
+handleSmtpCmd :: SessionState -> Command -> TlsStatus -> AuthStatus -> (Event, SmtpFSM)
+handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
   where
-    match :: TlsStatus -> SessionState -> Command -> (Event, SmtpFSM)
-    match _         HaveQuit  _            = undefined
-    match _         HaveData  Data         = undefined
-    match _         _         Quit         = trans (HaveQuit, WantQuit)
-    match _         Unknown   (Helo x)     = trans (HaveHelo, SayHelo x)
-    match _         _         (Helo x)     = event (SayHeloAgain x)
-    match _         Unknown   (Ehlo x)     = trans (HaveEhlo, SayEhlo x)
-    match _         _         (Ehlo x)     = event (SayEhloAgain x)
-    match Required  _         (MailFrom _) = event NeedStartTlsFirst
-    match _         Unknown   (MailFrom _) = event NeedHeloFirst
-    match _         _         (MailFrom x) = trans (HaveMailFrom, SetMailFrom x)
-    match Required  _         (RcptTo _)   = event NeedStartTlsFirst
-    match _         Unknown   (RcptTo _)   = event NeedHeloFirst
-    match _         HaveHelo  (RcptTo _)   = event NeedMailFromFirst
-    match _         HaveEhlo  (RcptTo _)   = event NeedMailFromFirst
-    match _         _         (RcptTo x)   = trans (HaveRcptTo, AddRcptTo x)
-    match Required  _            Data      = event NeedStartTlsFirst
-    match _         Unknown      Data      = event NeedHeloFirst
-    match _         HaveHelo     Data      = event NeedMailFromFirst
-    match _         HaveEhlo     Data      = event NeedMailFromFirst
-    match _         HaveMailFrom Data      = event NeedRcptToFirst
-    match _         HaveRcptTo   Data      = trans (HaveData, StartData)
-    match Required  _           Rset       = event NeedStartTlsFirst
-    match _         _           Rset       = trans (HaveHelo, WantReset)
-    match Active    _           StartTls   = event TlsAlreadyActive
-    match Forbidden _           StartTls   = event TlsNotSupported
-    match _         _           StartTls   = trans (Unknown, WantTls)
+    match :: TlsStatus -> AuthStatus -> SessionState -> Command -> (Event, SmtpFSM)
+    match _         _            HaveQuit  _            = undefined
+    match _         _            HaveData  Data         = undefined
+    match _         _            _         Quit         = trans (HaveQuit, WantQuit)
+    match _         _            Unknown   (Helo x)     = trans (HaveHelo, SayHelo x)
+    match _         _            _         (Helo x)     = event (SayHeloAgain x)
+    match _         _            Unknown   (Ehlo x)     = trans (HaveEhlo, SayEhlo x)
+    match _         _            _         (Ehlo x)     = event (SayEhloAgain x)
+    match Required  _            _         (MailFrom _) = event NeedStartTlsFirst
+    match _         AuthRequired _         (MailFrom _) = event NeedAuthFirst
+    match _         _            Unknown   (MailFrom _) = event NeedHeloFirst
+    match _         _            _         (MailFrom x) = trans (HaveMailFrom, SetMailFrom x)
+    match Required  _            _         (RcptTo _)   = event NeedStartTlsFirst
+    match _         AuthRequired _         (RcptTo _)   = event NeedAuthFirst
+    match _         _            Unknown   (RcptTo _)   = event NeedHeloFirst
+    match _         _            HaveHelo  (RcptTo _)   = event NeedMailFromFirst
+    match _         _            HaveEhlo  (RcptTo _)   = event NeedMailFromFirst
+    match _         _            _         (RcptTo x)   = trans (HaveRcptTo, AddRcptTo x)
+    match Required  _            _            Data      = event NeedStartTlsFirst
+    match _         AuthRequired _            Data      = event NeedAuthFirst
+    match _         _            Unknown      Data      = event NeedHeloFirst
+    match _         _            HaveHelo     Data      = event NeedMailFromFirst
+    match _         _            HaveEhlo     Data      = event NeedMailFromFirst
+    match _         _            HaveMailFrom Data      = event NeedRcptToFirst
+    match _         _            HaveRcptTo   Data      = trans (HaveData, StartData)
+    match Required  _            _           Rset       = event NeedStartTlsFirst
+    match _         _            _           Rset       = trans (HaveHelo, WantReset)
+    match Active    _            _           StartTls   = event TlsAlreadyActive
+    match Forbidden _            _           StartTls   = event TlsNotSupported
+    match _         _            _           StartTls   = trans (Unknown, WantTls)
+    match Required  _            _           (Auth _)   = event NeedStartTlsFirst
+    match _         _            _           (Auth d)   = trans (HaveEhlo, WantAuth d)
 
     event :: Event -> (Event, SmtpFSM)
     event e = (e, SmtpFSM (handleSmtpCmd st))
@@ -143,6 +154,7 @@ parseCommand = commands <* crlf
                       , parseHelo
                       , parseEhlo
                       , parseStartTls
+                      , parseAuth
                       , parseMailFrom
                       , parseRcptTo
                       ]
@@ -169,6 +181,9 @@ parseRcptTo = stringCI "rcpt to:<" *> (RcptTo `fmap` addrSpec) <* char '>'
 
 parseStartTls :: Parser Command
 parseStartTls = stringCI "starttls" *> pure StartTls
+
+parseAuth :: Parser Command
+parseAuth = Auth <$> (stringCI "auth plain" *> char ' ' *> takeWhile (notInClass "\r "))
 
 parseRset :: Parser Command
 parseRset = stringCI "rset" *> pure Rset

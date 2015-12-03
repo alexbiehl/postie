@@ -17,8 +17,9 @@ data HandlerResponse = Accepted -- ^ Accepted, allow further processing.
                      | Rejected  -- ^ Rejected, stop transaction.
 
 -- | Received email
-data Mail = Mail {
-    mailSessionID  :: SessionID
+data Mail = Mail
+  { mailSessionID  :: SessionID
+  , mailAuth       :: Maybe ByteString
   , mailSender     :: Address -- ^ Sender
   , mailRecipients :: [Address]  -- ^ Recipients
   , mailBody       :: Producer ByteString IO () -- ^ Mail content

@@ -18,6 +18,7 @@ import qualified Pipes.Parse as P
 import qualified Network.TLS as TLS
 
 import Control.Applicative
+import Control.Arrow ((&&&))
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -41,8 +42,9 @@ data SessionState = SessionState {
 type SessionM a = ReaderT SessionEnv (StateT SessionState IO) a
 
 data Transaction = TxnInitial
-                 | TxnHaveMailFrom Address
-                 | TxnHaveRecipient Address [Address]
+                 | TxnHaveAuth ByteString
+                 | TxnHaveMailFrom (Maybe ByteString) Address
+                 | TxnHaveRecipient (Maybe ByteString) Address [Address]
 
 mkSessionEnv :: SessionID -> Application -> Settings -> Connection -> Maybe TLS.ServerParams -> SessionEnv
 mkSessionEnv = SessionEnv
@@ -62,7 +64,7 @@ startSession = do
 
 sessionLoop :: SessionM ()
 sessionLoop = do
-    (event, fsm') <- SMTP.step <$> getSmtpFsm <*> getCommand <*> getTlsStatus
+    (event, fsm') <- SMTP.step <$> getSmtpFsm <*> getCommand <*> getTlsStatus <*> getAuthStatus
     case event of
       WantQuit -> do
         sendReply $ reply 221 "goodbye"
@@ -85,6 +87,22 @@ sessionLoop = do
                | p == AllowStartTLS  -> SMTP.Permitted
                | p == DemandStartTLS -> SMTP.Required
         _                            -> SMTP.Forbidden
+    getAuthStatus = do
+      reqAuth <- asks (settingsRequireAuth . sessionSettings)
+      txn <- gets sessionTransaction
+      return $ case txn of
+        TxnInitial -> if reqAuth then SMTP.AuthRequired else SMTP.NoAuth
+        TxnHaveAuth _ -> SMTP.Authed
+        TxnHaveMailFrom (Just _) _ -> SMTP.Authed
+        TxnHaveRecipient (Just _) _ _ -> SMTP.Authed
+        _ -> SMTP.NoAuth
+
+preserveAuth :: (Maybe ByteString -> Transaction) -> Transaction -> Transaction
+preserveAuth f t = case t of
+  TxnInitial -> f Nothing
+  TxnHaveAuth d -> f (Just d)
+  TxnHaveMailFrom a _ -> f a
+  TxnHaveRecipient a _ _ -> f a
 
 handleHelo :: ByteString -> SessionM HandlerResponse
 handleHelo x = do
@@ -122,7 +140,7 @@ handleEvent (SetMailFrom x)  = do
 
   result  <- liftIO $ handler sid x
   handlerResponse result $ do
-    modify (\ss -> ss { sessionTransaction = TxnHaveMailFrom x })
+    modify (\ss -> ss { sessionTransaction = preserveAuth (`TxnHaveMailFrom` x) (sessionTransaction ss) })
     sendReply ok
 
 handleEvent (AddRcptTo x)   = do
@@ -138,8 +156,8 @@ handleEvent (AddRcptTo x)   = do
   handlerResponse result $ do
     txn <- gets sessionTransaction
     let txn' = case txn of
-              (TxnHaveMailFrom y)     -> TxnHaveRecipient y [x]
-              (TxnHaveRecipient y xs) -> TxnHaveRecipient y (x:xs)
+              (TxnHaveMailFrom a y)     -> TxnHaveRecipient a y [x]
+              (TxnHaveRecipient a y xs) -> TxnHaveRecipient a y (x:xs)
               _                       -> error "impossible"
     modify (\ss -> ss {sessionTransaction = txn' })
     sendReply ok
@@ -154,9 +172,9 @@ handleEvent StartData       = do
     , sessionConnection = conn
     } <- ask
 
-    (TxnHaveRecipient sender recipients) <- gets sessionTransaction
+    (TxnHaveRecipient auth sender recipients) <- gets sessionTransaction
     let chunks = dataChunks (settingsMaxDataSize settings) (toProducer conn)
-    let mail   = Mail sid sender recipients chunks
+    let mail   = Mail sid auth sender recipients chunks
 
     result <- liftIO $ app mail
     handlerResponse result $ do
@@ -179,6 +197,16 @@ handleEvent WantTls = do
 
   liftIO $ connSetSecure conn serverParams
   modify (\ss -> ss { sessionTransaction = TxnInitial })
+
+handleEvent (WantAuth d) = do
+  (sid, settings) <- asks (sessionID &&& sessionSettings)
+
+  let handler = settingsOnAuth settings
+
+  result <- liftIO $ handler sid d
+  handlerResponse result $ do
+    sendReply ok
+    modify (\ss -> ss { sessionTransaction = TxnHaveAuth d })
 
 handleEvent WantReset = do
   sendReply ok

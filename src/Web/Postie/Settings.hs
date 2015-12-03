@@ -37,12 +37,14 @@ data Settings = Settings {
   , settingsMaxDataSize     :: Int    -- ^ Maximal size of incoming mail data
   , settingsHost            :: Maybe HostName -- ^ Hostname which is shown in posties greeting.
   , settingsTLS             :: Maybe TLSSettings -- ^ TLS settings if you wish to secure connections.
+  , settingsRequireAuth     :: Bool -- ^ Whether authentication is required
   , settingsOnException     :: Maybe SessionID -> SomeException -> IO () -- ^ Exception handler (default is defaultExceptionHandler)
   , settingsBeforeMainLoop  :: IO () -- ^ Action will be performed before main processing begins.
   , settingsOnOpen          :: SessionID -> SockAddr -> IO () -- ^ Action will be performed when connection has been opened.
   , settingsOnClose         :: SessionID -> IO () -- ^ Action will be performed when connection has been closed.
   , settingsOnStartTLS      :: SessionID -> IO () -- ^ Action will be performend on STARTTLS command.
   , settingsOnHello         :: SessionID -> ByteString -> IO HandlerResponse -- ^ Performed when client says hello
+  , settingsOnAuth          :: SessionID -> ByteString -> IO HandlerResponse -- ^ Performed when client authenticates
   , settingsOnMailFrom      :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client starts mail transaction
   , settingsOnRecipient     :: SessionID -> Address -> IO HandlerResponse -- ^ Performed when client adds recipient to mail transaction.
   }
@@ -58,11 +60,13 @@ defaultSettings = Settings {
     , settingsMaxDataSize     = 32000
     , settingsHost            = Nothing
     , settingsTLS             = Nothing
+    , settingsRequireAuth     = False
     , settingsOnException     = defaultExceptionHandler
     , settingsBeforeMainLoop  = return ()
     , settingsOnOpen          = \_ _ -> return ()
     , settingsOnClose         = const $ return ()
     , settingsOnStartTLS      = const $ return ()
+    , settingsOnAuth          = void
     , settingsOnHello         = void
     , settingsOnMailFrom      = void
     , settingsOnRecipient     = void
