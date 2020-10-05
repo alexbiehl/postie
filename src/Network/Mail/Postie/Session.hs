@@ -192,7 +192,7 @@ handleEvent WantReset = do
   sendReply ok
   modify (\ss -> ss {sessionTransaction = TxnInitial})
 handleEvent TlsAlreadyActive =
-  sendReply $ reply 454 "STARTTLS not support (already active)"
+  sendReply $ reply 454 "STARTTLS not supported (already active)"
 handleEvent TlsNotSupported =
   sendReply $ reply 454 "STARTTLS not supported"
 handleEvent NeedStartTlsFirst =

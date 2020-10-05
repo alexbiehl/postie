@@ -21,15 +21,12 @@ module Network.Mail.Postie
     TooMuchDataException,
 
     -- * Re-exports
-    -- $reexports
     P.Producer,
     P.Consumer,
     P.runEffect,
     (P.>->),
   )
 where
-
---(Family(AF_INET6), SocketType(Stream), socket, Socket, SockAddr, accept, close, PortNumber, withSocketsDo)
 
 import Control.Concurrent
 import Control.Exception as E
