@@ -18,8 +18,8 @@ settings =
       settingsTLS =
         Just
           def
-            { certFile = "server.crt",
-              keyFile = "server.key"
+            { certFile = "examples/tls/server.crt",
+              keyFile = "examples/tls/server.key"
             }
     }
 
