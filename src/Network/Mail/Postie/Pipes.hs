@@ -1,24 +1,21 @@
+module Network.Mail.Postie.Pipes
+  ( dataChunks,
+    attoParser,
+    UnexpectedEndOfInputException,
+    TooMuchDataException,
+  )
+where
 
-module Web.Postie.Pipes(
-    dataChunks
-  , attoParser
-  , UnexpectedEndOfInputException
-  , TooMuchDataException
-  ) where
-
-import Prelude hiding (lines)
-
-import Pipes
-import Pipes.Parse
-
+import Control.Applicative
+import Control.Exception (Exception, throw)
+import Control.Monad (unless)
+import qualified Data.Attoparsec.ByteString as AT
+import qualified Data.ByteString.Char8 as BS
 import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Attoparsec as AT
-
-import Control.Monad (unless)
-import Control.Applicative
-import Control.Exception (throw, Exception)
+import Pipes
+import Pipes.Parse
+import Prelude hiding (lines)
 
 data UnexpectedEndOfInputException = UnexpectedEndOfInputException
   deriving (Show, Typeable)
@@ -27,16 +24,17 @@ data TooMuchDataException = TooMuchDataException
   deriving (Show, Typeable)
 
 instance Exception UnexpectedEndOfInputException
+
 instance Exception TooMuchDataException
 
 attoParser :: AT.Parser r -> Parser BS.ByteString IO (Maybe r)
 attoParser p = do
-    result <- AT.parseWith draw' p ""
-    case result of
-      AT.Done t r -> do
-                      unless (BS.null t) (unDraw t)
-                      return (Just r)
-      _           -> return Nothing
+  result <- AT.parseWith draw' p ""
+  case result of
+    AT.Done t r -> do
+      unless (BS.null t) (unDraw t)
+      return (Just r)
+    _ -> return Nothing
   where
     draw' = fromMaybe "" <$> draw
 
@@ -50,10 +48,10 @@ dataChunks n p = lines p >-> go n
         yield (unescape bs)
         yield "\r\n"
         go (remaining - BS.length bs - 2)
-
-    unescape bs | BS.null bs                            = bs
-                | BS.head bs == '.' && BS.length bs > 1 = BS.tail bs
-                | otherwise                             = bs
+    unescape bs
+      | BS.null bs = bs
+      | BS.head bs == '.' && BS.length bs > 1 = BS.tail bs
+      | otherwise = bs
 
 lines :: Producer BS.ByteString IO () -> Producer BS.ByteString IO ()
 lines = go
@@ -70,12 +68,11 @@ lineParser = go id
       bs <- maybe (throw UnexpectedEndOfInputException) (return . f) =<< draw
       case BS.elemIndex '\r' bs of
         Nothing -> go (BS.append bs)
-        Just n  -> do
+        Just n -> do
           let here = killCR $ BS.take n bs
               rest = BS.drop (n + 1) bs
           unDraw rest
           return here
-
     killCR bs
       | BS.null bs = bs
       | BS.head bs == '\n' || BS.head bs == '\r' = killCR $ BS.tail bs
