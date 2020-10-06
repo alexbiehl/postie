@@ -54,7 +54,7 @@ runSettings settings app = withSocketsDo
     port = settingsPort settings
     listenOn portNum =
       bracketOnError
-        (socket AF_INET6 Stream 0)
+        (socket AF_INET6 Stream defaultProtocol)
         close
         ( \sock -> do
             setSocketOption sock ReuseAddr 1
