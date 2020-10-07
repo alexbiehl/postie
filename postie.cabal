@@ -32,6 +32,9 @@ description: `postie` is a little smtp server library for receiving emails. It i
              the mail data. Eventually I will create a seperate package for parsing mime
              messages with `pipes-parse` when postie becomes more stable and standard compliant.
 author: Alex Biehl
+extra-source-files:
+  examples/tls/server.crt,
+  examples/tls/server.key
 
 source-repository head
   type: git
