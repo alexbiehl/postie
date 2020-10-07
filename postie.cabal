@@ -1,6 +1,6 @@
 cabal-version: >=1.10
 name: postie
-version: 0.6.0.1
+version: 0.6.0.2
 build-type: Simple
 license: BSD3
 license-file: LICENSE
@@ -73,7 +73,14 @@ library
     Network.Mail.Postie.Pipes
     Network.Mail.Postie.Protocol
     Network.Mail.Postie.Session
-  ghc-options: -O2 -Wall
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
 
 executable postie-example-simple
   build-depends:
