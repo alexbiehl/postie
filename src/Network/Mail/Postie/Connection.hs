@@ -75,7 +75,7 @@ connClose (Connection cbe) = closeBackend =<< readIORef cbe
     closeBackend (ConnPlain s) = close s
     closeBackend (ConnSecure context) = bye context `finally` contextClose context
 
-toProducer :: (MonadIO m) => Connection -> P.Producer' BS.ByteString m ()
+toProducer :: (MonadIO m) => Connection -> P.Producer BS.ByteString m ()
 toProducer conn = go
   where
     go = do
