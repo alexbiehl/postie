@@ -147,7 +147,7 @@ mkServerParams tlsSettings = do
       }
   where
     loadCredentials =
-      either (throw . TLS.Error_Certificate) id
+      either (throw . TLS.Uncontextualized . TLS.Error_Certificate) id
         <$> TLS.credentialLoadX509 (certFile tlsSettings) (keyFile tlsSettings)
 
 defaultExceptionHandler :: Maybe SessionID -> SomeException -> IO ()
@@ -167,11 +167,11 @@ defaultExceptionHandler _ e = throwIO e `catches` handlers
     tlsh TLS.Terminated {} = return ()
     tlsh TLS.HandshakeFailed {} = return ()
     tlsh x = hPrint stderr x
-    th :: TLS.TLSError -> IO ()
-    th TLS.Error_EOF = return ()
-    th (TLS.Error_Packet_Parsing _) = return ()
-    th (TLS.Error_Packet _) = return ()
-    th (TLS.Error_Protocol _) = return ()
+    th :: TLS.TLSException -> IO ()
+    th (TLS.Uncontextualized (TLS.Error_EOF)) = return ()
+    th (TLS.Uncontextualized (TLS.Error_Packet_Parsing _)) = return ()
+    th (TLS.Uncontextualized (TLS.Error_Packet _)) = return ()
+    th (TLS.Uncontextualized (TLS.Error_Protocol _ _)) = return ()
     th x = hPrint stderr x
     sh :: SomeException -> IO ()
     sh = hPrint stderr
