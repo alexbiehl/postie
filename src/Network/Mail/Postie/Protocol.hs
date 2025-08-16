@@ -1,3 +1,5 @@
+{-# OPTIONS -fmax-pmcheck-models=100 #-}
+
 module Network.Mail.Postie.Protocol
   ( TlsStatus (..),
     AuthStatus (..),
@@ -88,9 +90,9 @@ handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
     match _ _ HaveData Data = undefined
     match _ _ _ Quit = trans (HaveQuit, WantQuit)
     match _ _ Unknown (Helo x) = trans (HaveHelo, SayHelo x)
-    match _ _ _ (Helo x) = event (SayHeloAgain x)
+    match _ _ _ (Helo x) = trans (HaveHelo, SayHeloAgain x)
     match _ _ Unknown (Ehlo x) = trans (HaveEhlo, SayEhlo x)
-    match _ _ _ (Ehlo x) = event (SayEhloAgain x)
+    match _ _ _ (Ehlo x) = trans (HaveEhlo, SayEhloAgain x)
     match Required _ _ (MailFrom _) = event NeedStartTlsFirst
     match _ AuthRequired _ (MailFrom _) = event NeedAuthFirst
     match _ _ Unknown (MailFrom _) = event NeedHeloFirst
