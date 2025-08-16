@@ -13,7 +13,7 @@ where
 import Control.Applicative
 import Control.Exception
 import Data.ByteString (ByteString)
-import Data.Default.Class
+import Data.Default
 import GHC.IO.Exception (IOErrorType (..))
 import Network.Socket (HostName, PortNumber, SockAddr)
 import qualified Network.TLS as TLS
