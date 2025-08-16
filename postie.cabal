@@ -48,9 +48,9 @@ flag examples
 library
   build-depends:
     attoparsec           >= 0.13.2.3 && < 0.15,
-    base ,
+    base                 >= 4.13.0 && < 5,
     bytestring           >= 0.10.10 && < 0.13,
-    data-default-class   >= 0.1.2 && < 0.2,
+    data-default         >= 0.8 && <0.9,
     mtl                  >= 2.2.2 && < 2.4,
     network              >= 3.1.1 && < 3.2,
     pipes                >= 4.3.14 && < 4.4,
@@ -85,7 +85,7 @@ library
 executable postie-example-simple
   build-depends:
     postie,
-    base,
+    base                 >= 4.13.0 && < 5,
     pipes-bytestring     >= 2.1.6 && < 2.2
   if flag(examples)
     buildable: True
@@ -99,7 +99,7 @@ executable postie-example-simple
 executable postie-example-tls
   build-depends:
     postie,
-    base,
+    base                 >= 4.13.0 && < 5,
     pipes-bytestring     >= 2.1.6 && < 2.2
   if flag(examples)
     buildable: True
