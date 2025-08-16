@@ -122,8 +122,12 @@ handleEvent (SayEhlo x) = do
   result <- handleHelo x
   handlerResponse result $
     sendReply =<< ehloAdvertisement
-handleEvent (SayEhloAgain _) = sendReply ok
-handleEvent (SayHeloAgain _) = sendReply ok
+handleEvent (SayEhloAgain _) = do
+  sendReply ok
+  modify (\ss -> ss {sessionTransaction = TxnInitial})
+handleEvent (SayHeloAgain _) = do
+  sendReply ok
+  modify (\ss -> ss {sessionTransaction = TxnInitial})
 handleEvent SayOK = sendReply ok
 handleEvent (SetMailFrom x) = do
   SessionEnv
