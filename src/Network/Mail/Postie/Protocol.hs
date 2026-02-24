@@ -203,5 +203,5 @@ parseNoop :: Parser Command
 parseNoop = do
   void $ stringCI "noop"
   -- Per RFC 5321 §4.1.1.9, NOOP should ignore any parameter string specified
-  void $ skipWhile (notInClass "\r\n")
+  skipWhile (notInClass "\r\n")
   pure Noop
