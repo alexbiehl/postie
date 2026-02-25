@@ -75,6 +75,7 @@ data Command
   | Data
   | Rset
   | Quit
+  | Noop
   deriving (Eq, Show)
 
 newtype SmtpFSM = SmtpFSM {step :: Command -> TlsStatus -> AuthStatus -> (Event, SmtpFSM)}
@@ -117,8 +118,11 @@ handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
     match _ _ _ StartTls = trans (Unknown, WantTls)
     match Required _ _ (Auth _) = event NeedStartTlsFirst
     match _ _ _ (Auth d) = trans (HaveEhlo, WantAuth d)
+    match _ _ _ Noop = event SayOK
+
     event :: Event -> (Event, SmtpFSM)
     event e = (e, SmtpFSM (handleSmtpCmd st))
+
     trans :: (SessionState, Event) -> (Event, SmtpFSM)
     trans (st', e) = (e, SmtpFSM (handleSmtpCmd st'))
 
@@ -156,7 +160,8 @@ parseCommand = commands <* crlf
           parseStartTls,
           parseAuth,
           parseMailFrom,
-          parseRcptTo
+          parseRcptTo,
+          parseNoop
         ]
 
 crlf :: Parser ()
@@ -193,3 +198,10 @@ parseData = stringCI "data" $> Data
 
 parseQuit :: Parser Command
 parseQuit = stringCI "quit" $> Quit
+
+parseNoop :: Parser Command
+parseNoop = do
+  void $ stringCI "noop"
+  -- Per RFC 5321 §4.1.1.9, NOOP should ignore any parameter string specified
+  skipWhile (notInClass "\r\n")
+  pure Noop
