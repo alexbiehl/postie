@@ -38,7 +38,6 @@ data SessionState
   | HaveEhlo
   | HaveMailFrom
   | HaveRcptTo
-  | HaveData
   | HaveQuit
 
 type Mailbox = Address
@@ -63,6 +62,7 @@ data Event
   | NeedHeloFirst
   | NeedMailFromFirst
   | NeedRcptToFirst
+  | AlreadyInMailTxn
   deriving (Eq, Show)
 
 data Command
@@ -88,7 +88,6 @@ handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
   where
     match :: TlsStatus -> AuthStatus -> SessionState -> Command -> (Event, SmtpFSM)
     match _ _ HaveQuit _ = error "received command after QUIT"
-    match _ _ HaveData Data = trans (HaveEhlo, NeedMailFromFirst)
     match _ _ _ Quit = trans (HaveQuit, WantQuit)
     match _ _ Unknown (Helo x) = trans (HaveHelo, SayHelo x)
     match _ _ _ (Helo x) = trans (HaveHelo, SayHeloAgain x)
@@ -97,20 +96,22 @@ handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
     match Required _ _ (MailFrom _) = event NeedStartTlsFirst
     match _ AuthRequired _ (MailFrom _) = event NeedAuthFirst
     match _ _ Unknown (MailFrom _) = event NeedHeloFirst
-    match _ _ _ (MailFrom x) = trans (HaveMailFrom, SetMailFrom x)
+    match _ _ HaveHelo (MailFrom x) = trans (HaveMailFrom, SetMailFrom x)
+    match _ _ HaveEhlo (MailFrom x) = trans (HaveMailFrom, SetMailFrom x)
+    match _ _ _ (MailFrom _) = event AlreadyInMailTxn
     match Required _ _ (RcptTo _) = event NeedStartTlsFirst
     match _ AuthRequired _ (RcptTo _) = event NeedAuthFirst
     match _ _ Unknown (RcptTo _) = event NeedHeloFirst
-    match _ _ HaveHelo (RcptTo _) = event NeedMailFromFirst
-    match _ _ HaveEhlo (RcptTo _) = event NeedMailFromFirst
-    match _ _ _ (RcptTo x) = trans (HaveRcptTo, AddRcptTo x)
+    match _ _ HaveMailFrom (RcptTo x) = trans (HaveRcptTo, AddRcptTo x)
+    match _ _ HaveRcptTo (RcptTo x) = event (AddRcptTo x)
+    match _ _ _ (RcptTo _) = event NeedMailFromFirst
     match Required _ _ Data = event NeedStartTlsFirst
     match _ AuthRequired _ Data = event NeedAuthFirst
     match _ _ Unknown Data = event NeedHeloFirst
     match _ _ HaveHelo Data = event NeedMailFromFirst
     match _ _ HaveEhlo Data = event NeedMailFromFirst
     match _ _ HaveMailFrom Data = event NeedRcptToFirst
-    match _ _ HaveRcptTo Data = trans (HaveData, StartData)
+    match _ _ HaveRcptTo Data = trans (HaveEhlo, StartData)
     match Required _ _ Rset = event NeedStartTlsFirst
     match _ _ _ Rset = trans (HaveHelo, WantReset)
     match Active _ _ StartTls = event TlsAlreadyActive

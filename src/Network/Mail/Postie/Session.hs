@@ -209,6 +209,8 @@ handleEvent NeedMailFromFirst =
   sendReply $ reply 503 "Need MAIL FROM first"
 handleEvent NeedRcptToFirst =
   sendReply $ reply 503 "Need RCPT TO first"
+handleEvent AlreadyInMailTxn =
+  sendReply $ reply 503 "Already in mail transaction"
 handleEvent _ = error "impossible"
 
 handlerResponse :: HandlerResponse -> SessionM () -> SessionM ()
