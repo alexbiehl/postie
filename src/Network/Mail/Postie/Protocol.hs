@@ -87,8 +87,8 @@ handleSmtpCmd :: SessionState -> Command -> TlsStatus -> AuthStatus -> (Event, S
 handleSmtpCmd st cmd tlsSt auth = match tlsSt auth st cmd
   where
     match :: TlsStatus -> AuthStatus -> SessionState -> Command -> (Event, SmtpFSM)
-    match _ _ HaveQuit _ = undefined
-    match _ _ HaveData Data = undefined
+    match _ _ HaveQuit _ = error "received command after QUIT"
+    match _ _ HaveData Data = trans (HaveHelo, NeedMailFromFirst)
     match _ _ _ Quit = trans (HaveQuit, WantQuit)
     match _ _ Unknown (Helo x) = trans (HaveHelo, SayHelo x)
     match _ _ _ (Helo x) = trans (HaveHelo, SayHeloAgain x)
