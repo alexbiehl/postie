@@ -1,2 +1,3 @@
 { pkgs ? import <nixpkgs> {} }:
-pkgs.haskellPackages.callCabal2nix "postie" ./. {}
+pkgs.haskell.lib.compose.doJailbreak
+  (pkgs.haskellPackages.callCabal2nix "postie" ./. {})
