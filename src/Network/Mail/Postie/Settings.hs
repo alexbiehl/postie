@@ -123,7 +123,7 @@ defaultTLSSettings =
       keyFile = "key.pem",
       security = DemandStartTLS,
       tlsLogging = def,
-      tlsAllowedVersions = [TLS.SSL3, TLS.TLS10, TLS.TLS11, TLS.TLS12],
+      tlsAllowedVersions = TLS.supportedVersions TLS.defaultSupported,
       tlsCiphers = TLS.ciphersuite_default
     }
 
